@@ -48,10 +48,6 @@ def normalize_col(s: str) -> str:
     )
 
 def find_column(df, keywords):
-    """
-    Находит колонку по списку ключевых фрагментов.
-    keywords = ["команд", "team"] → ищет в df.columns
-    """
     normalized = {i: normalize_col(c) for i, c in enumerate(df.columns)}
 
     for idx, col in normalized.items():
@@ -88,11 +84,9 @@ def colorize_table(df: pd.DataFrame):
 
     df = df.copy()
 
-    # Нормализация всех строк
     df = df.applymap(lambda x: str(x).replace("\xa0", " ").strip()
                      if isinstance(x, str) else x)
 
-    # Ищем колонку команды
     team_col = find_column(df, ["команда", "team"])
 
     if team_col:
@@ -120,7 +114,7 @@ def colorize_table(df: pd.DataFrame):
 
 
 # ============================================
-#  Разбор лучшего круга (универсальный)
+#  Разбор лучшего круга
 # ============================================
 def parse_lap_time(val):
     if not isinstance(val, str):
@@ -142,6 +136,13 @@ def render_season_2024(
 ):
 
     st.title("Сезон Формулы-1 2024")
+
+    # ========= DEBUG ВСТАВКИ (ОЧЕНЬ ВАЖНО) =========
+    st.write("DEBUG qualifying cols:", list(qualifying.columns))
+    st.write("DEBUG race_drivers cols:", list(race_drivers.columns))
+    st.write("DEBUG race_teams cols:", list(race_teams.columns))
+    st.write("DEBUG wcc cols:", list(wcc.columns))
+    # ===============================================
 
     tab_gp, tab_wdc, tab_wcc, tab_teams = st.tabs(
         ["Гран-при", "WDC", "WCC", "Команды"]
