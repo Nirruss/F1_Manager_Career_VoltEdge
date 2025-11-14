@@ -18,6 +18,10 @@ TEAM_COLORS = {
     "Alpine": "#0090FF",
 }
 
+
+# =========================
+#  Окраска таблиц командных данных
+# =========================
 def colorize_table(df):
     if df is None or len(df) == 0:
         return df
@@ -58,42 +62,51 @@ def render_season_2024(
     with tab_gp:
         st.subheader(f"Гран-при {race_name}")
 
-        # Квалификация
+        # -------------------------
+        # Квалификация — раскрашена по командам
+        # -------------------------
+        st.subheader("Квалификация")
         st.write(colorize_table(qualifying))
 
-        # =========================
-        #  ПОДСВЕТКА ЛУЧШЕГО КРУГА (ФИОЛЕТОВЫЙ)
-        # =========================
-        if "Лучший круг" in race_drivers.columns:
+        # -------------------------
+        # Гонка: пилоты — без командной раскраски
+        # -------------------------
+        st.subheader("Гонка — пилоты")
+
+        df = race_drivers.copy()
+
+        if "Лучший круг" in df.columns:
             try:
-                # Преобразуем строки вида "1:23.456" → timedelta
-                times = pd.to_timedelta(race_drivers["Лучший круг"])
+                times = pd.to_timedelta(df["Лучший круг"])
                 min_time = times.min()
 
-                def highlight_fastest(row):
+                def style_fastest(row):
                     try:
                         t = pd.to_timedelta(row["Лучший круг"])
                         if t == min_time:
                             return [
-                                "background-color: #8847BD; color: white; font-weight: bold"
+                                "background-color: #8847BD; color: white; "
+                                "font-weight: bold"
                                 for _ in row
                             ]
                         else:
                             return [""] * len(row)
-                    except Exception:
+                    except:
                         return [""] * len(row)
 
-                styled_race = race_drivers.style.apply(highlight_fastest, axis=1)
-                st.write(styled_race)
+                styled = df.style.apply(style_fastest, axis=1)
+                st.write(styled)
 
             except Exception:
-                # Если формат времени не конвертируется — просто выводим стандартную таблицу
-                st.write(colorize_table(race_drivers))
-        else:
-            # Если колонки нет — обычный вывод
-            st.write(colorize_table(race_drivers))
+                st.write(df)
 
-        # Команды
+        else:
+            st.write(df)
+
+        # -------------------------
+        # Гонка: команды — раскрашены по командам
+        # -------------------------
+        st.subheader("Гонка — команды")
         st.write(colorize_table(race_teams))
 
     # =========================
@@ -111,7 +124,7 @@ def render_season_2024(
         st.write(colorize_table(wcc))
 
     # =========================
-    #  TEAMS
+    #  Составы команд
     # =========================
     with tab_teams:
         st.subheader("Составы команд")
