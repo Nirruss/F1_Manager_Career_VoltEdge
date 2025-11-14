@@ -123,13 +123,21 @@ def parse_lap_time(val):
     if not isinstance(val, str):
         return pd.NaT
 
-    s = normalize_str(val)
+    # чистим ВНУТРЕННИЕ символы, но НЕ меняем регистр
+    s = (
+        val.replace("\xa0", " ")
+           .replace("\u200b", "")
+           .replace("\ufeff", "")
+           .strip()
+    )
 
-    if any(x in s for x in ["круг", "выб", "dnf", "+1", "lap+1"]):
+    # фильтрация не-кругов
+    s_low = s.lower()
+    if any(x in s_low for x in ["круг", "выб", "dnf", "+1", "lap+1"]):
         return pd.NaT
 
     try:
-        return pd.to_timedelta(val)
+        return pd.to_timedelta(s)
     except:
         return pd.NaT
 
@@ -186,7 +194,14 @@ def render_season_2024(
                         for i in range(len(col))
                     ]
 
-                st.write(df.style.apply(highlight, axis=0))
+                # красим команды
+                styled = colorize_table(df)
+
+                # подсвечиваем лучший круг поверх командных цветов
+                styled = styled.apply(highlight, axis=0)
+
+                st.write(styled)
+
             else:
                 st.write(df)
         else:
