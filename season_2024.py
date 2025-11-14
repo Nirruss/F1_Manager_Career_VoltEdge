@@ -66,7 +66,8 @@ def render_season_2024(
         # Квалификация — раскрашена по командам
         # -------------------------
         st.subheader("Квалификация")
-        st.write(colorize_table(qualifying))
+        st.write("DEBUG: qualifying columns → " + str(list(qualifying.columns)))
+        st.write(qualifying)
 
         # -------------------------
         # Гонка: пилоты — без командной раскраски
