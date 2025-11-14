@@ -28,6 +28,10 @@ def colorize_table(df):
 
     df = df.copy()
 
+    # Нормализуем названия колонок (убираем пробелы, скрытые символы)
+    df.columns = [str(c).strip() for c in df.columns]
+
+    # Добавляем цвет команд
     if "Команда" in df.columns:
         df["color"] = df["Команда"].map(TEAM_COLORS).fillna("#FFFFFF")
     else:
@@ -66,15 +70,15 @@ def render_season_2024(
         # Квалификация — раскрашена по командам
         # -------------------------
         st.subheader("Квалификация")
-        st.write("DEBUG: qualifying columns → " + str(list(qualifying.columns)))
-        st.write(qualifying)
+        st.write(colorize_table(qualifying))
 
         # -------------------------
-        # Гонка: пилоты — без командной раскраски
+        # Гонка: пилоты — БЕЗ раскраски команд, только фиолетовый лучший круг
         # -------------------------
         st.subheader("Гонка — пилоты")
 
         df = race_drivers.copy()
+        df.columns = [str(c).strip() for c in df.columns]
 
         if "Лучший круг" in df.columns:
             try:
@@ -86,8 +90,7 @@ def render_season_2024(
                         t = pd.to_timedelta(row["Лучший круг"])
                         if t == min_time:
                             return [
-                                "background-color: #8847BD; color: white; "
-                                "font-weight: bold"
+                                "background-color: #8847BD; color: white; font-weight: bold"
                                 for _ in row
                             ]
                         else:
@@ -95,17 +98,15 @@ def render_season_2024(
                     except:
                         return [""] * len(row)
 
-                styled = df.style.apply(style_fastest, axis=1)
-                st.write(styled)
+                st.write(df.style.apply(style_fastest, axis=1))
 
             except Exception:
                 st.write(df)
-
         else:
             st.write(df)
 
         # -------------------------
-        # Гонка: команды — раскрашены по командам
+        # Гонка: команды — раскрашена по командам
         # -------------------------
         st.subheader("Гонка — команды")
         st.write(colorize_table(race_teams))
