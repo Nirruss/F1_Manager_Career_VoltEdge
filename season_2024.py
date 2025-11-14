@@ -1,10 +1,11 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import re
 
-# =========================
+# ============================================
 #  Цвета команд
-# =========================
+# ============================================
 TEAM_COLORS = {
     "Ferrari": "#DC0000",
     "Red Bull": "#1E41FF",
@@ -19,7 +20,6 @@ TEAM_COLORS = {
     "VoltEdge": "#F4EA00",
 }
 
-# Мэппинг официальных длинных названий команд → короткие
 TEAM_MAP = {
     "Oracle Red Bull Racing": "Red Bull",
     "Mercedes-AMG PETRONAS Formula One Team": "Mercedes",
@@ -34,9 +34,37 @@ TEAM_MAP = {
     "VoltEdge Quantum Racing": "VoltEdge",
 }
 
-# =========================
-#  Цвет текста по YIQ
-# =========================
+# ============================================
+#  Нормализация колонок
+# ============================================
+def normalize_col(s: str) -> str:
+    if not isinstance(s, str):
+        return s
+    return (
+        s.replace("\xa0", " ")   # NBSP → обычный пробел
+         .replace("\n", " ")
+         .strip()
+         .lower()
+    )
+
+def find_column(df, keywords):
+    """
+    Находит колонку по списку ключевых фрагментов.
+    keywords = ["команд", "team"] → ищет в df.columns
+    """
+    normalized = {i: normalize_col(c) for i, c in enumerate(df.columns)}
+
+    for idx, col in normalized.items():
+        for key in keywords:
+            if key in col:
+                return df.columns[idx]
+
+    return None
+
+
+# ============================================
+#  Цвет текста
+# ============================================
 def get_text_color(bg):
     if not isinstance(bg, str) or not bg.startswith("#"):
         return "black"
@@ -47,43 +75,36 @@ def get_text_color(bg):
     except:
         return "black"
 
-    # контраст
     yiq = (r * 299 + g * 587 + b * 114) / 1000
     return "white" if yiq < 150 else "black"
 
 
-# =========================
-#  Окраска таблиц команд
-# =========================
+# ============================================
+#  Окраска таблиц
+# ============================================
 def colorize_table(df: pd.DataFrame):
-    if df is None or len(df) == 0:
+    if df is None or df.empty:
         return df
 
     df = df.copy()
-    df.columns = [str(c).strip() for c in df.columns]
 
-    # Нормализация строк
-    df = df.applymap(lambda x: str(x).replace("\xa0", " ").strip() if isinstance(x, str) else x)
+    # Нормализация всех строк
+    df = df.applymap(lambda x: str(x).replace("\xa0", " ").strip()
+                     if isinstance(x, str) else x)
 
-    # Ищем колонку с названием команды
-    team_col = None
-    for col in df.columns:
-        if "Команда" in col:
-            team_col = col
-            break
-        if "Команды" in col:
-            team_col = col
-            break
+    # Ищем колонку команды
+    team_col = find_column(df, ["команда", "team"])
 
-    # Применяем цвета
     if team_col:
-        df["__team__"] = df[team_col].map(TEAM_MAP).fillna(df[team_col])
+        normalized = df[team_col].replace("\xa0", " ", regex=True).str.strip()
+        df["__team__"] = normalized.map(TEAM_MAP).fillna(normalized)
         df["__color__"] = df["__team__"].map(TEAM_COLORS).fillna("#FFFFFF")
     else:
         df["__color__"] = "#FFFFFF"
 
     df = df.reset_index(drop=True)
     row_colors = df["__color__"]
+
     display_df = df.drop(columns=["__color__", "__team__"], errors="ignore")
 
     def row_style(row):
@@ -94,22 +115,18 @@ def colorize_table(df: pd.DataFrame):
     return (
         display_df.style
         .apply(row_style, axis=1)
-        .set_table_styles([
-            dict(selector="th", props=[("background-color", "#222"), ("color", "white")]),
-            dict(selector="td", props=[("padding", "6px")]),
-        ])
         .hide(axis="index")
     )
 
 
-# =========================
-#  Разбор лучшего круга
-# =========================
+# ============================================
+#  Разбор лучшего круга (универсальный)
+# ============================================
 def parse_lap_time(val):
     if not isinstance(val, str):
         return pd.NaT
-    s = val.lower().strip()
-    if "круг" in s or "выб" in s or "dnf" in s:
+    s = normalize_col(val)
+    if any(x in s for x in ["круг", "выб", "dnf", "lap+1"]):
         return pd.NaT
     try:
         return pd.to_timedelta(val)
@@ -117,12 +134,13 @@ def parse_lap_time(val):
         return pd.NaT
 
 
-# =========================
-#  Основной рендер
-# =========================
+# ============================================
+#  Render
+# ============================================
 def render_season_2024(
     qualifying, race_drivers, race_teams, wdc, wcc, teams, race_name
 ):
+
     st.title("Сезон Формулы-1 2024")
 
     tab_gp, tab_wdc, tab_wcc, tab_teams = st.tabs(
@@ -133,57 +151,45 @@ def render_season_2024(
     with tab_gp:
         st.subheader(f"Гран-при {race_name}")
 
-        # Квалификация
         st.subheader("Квалификация")
         st.write(colorize_table(qualifying))
 
-        # -------- Гонка — пилоты ------------
+        # ---------- Гонка — пилоты ----------
         st.subheader("Гонка — пилоты")
-
         df = race_drivers.copy()
-        df.columns = [str(c).strip() for c in df.columns]
 
-        if "Лучший круг" in df.columns:
-            laps = df["Лучший круг"].apply(parse_lap_time)
+        lap_col = find_column(df, ["лучший", "best", "lap"])
+
+        if lap_col:
+            laps = df[lap_col].apply(parse_lap_time)
             valid = laps.dropna()
 
-            if len(valid) > 0:
+            if not valid.empty:
                 min_lap = valid.min()
-
-                # Маска строк с лучшим кругом
                 fastest_mask = laps == min_lap
 
-                def highlight_fastest(col):
-                    # Красим только колонку "Лучший круг"
-                    if col.name != "Лучший круг":
+                def highlight(col):
+                    if col.name != lap_col:
                         return [""] * len(col)
+                    return [
+                        "background-color:#8847BD; color:white; font-weight:bold"
+                        if fastest_mask.iloc[i] else ""
+                        for i in range(len(col))
+                    ]
 
-                    out = []
-                    for i, v in enumerate(col):
-                        if fastest_mask.iloc[i]:
-                            out.append("background-color: #8847BD; color: white; font-weight: bold")
-                        else:
-                            out.append("")
-                    return out
-
-                df = df.reset_index(drop=True)
-                st.write(df.style.apply(highlight_fastest, axis=0))
+                st.write(df.style.apply(highlight, axis=0))
             else:
                 st.write(df)
-
         else:
             st.write(df)
 
-        # Гонка команды
+        # ---------- Гонка — команды ----------
         st.subheader("Гонка — команды")
         st.write(colorize_table(race_teams))
 
     # ---------- WDC ----------
     with tab_wdc:
         st.subheader("Пилоты — WDC 2024")
-        wdc = wdc.copy()
-        num_cols = wdc.select_dtypes(include=["float"]).columns
-        wdc[num_cols] = wdc[num_cols].astype("Int64")
         st.write(colorize_table(wdc))
 
     # ---------- WCC ----------
