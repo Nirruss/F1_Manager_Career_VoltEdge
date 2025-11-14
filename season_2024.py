@@ -66,25 +66,26 @@ def colorize_table(df: pd.DataFrame):
         return df
 
     df = df.copy()
-
-    # Нормализуем названия колонок
     df.columns = [str(c).strip() for c in df.columns]
 
-    # Приводим названия команд к коротким и задаём цвет
+    # Определяем цвета команд
     if "Команда" in df.columns:
         df["Команда"] = df["Команда"].map(TEAM_MAP).fillna(df["Команда"])
-        df["color"] = df["Команда"].map(TEAM_COLORS).fillna("#FFFFFF")
+        df["__color__"] = df["Команда"].map(TEAM_COLORS).fillna("#FFFFFF")
     else:
-        df["color"] = "#FFFFFF"
+        df["__color__"] = "#FFFFFF"
 
-    # Подбираем цвет текста
+    # Сохраняем цвета в отдельную series (ПРАВИЛЬНО!)
+    row_colors = df["__color__"].copy()
+
+    # Удаляем служебную колонку до рендера
+    display_df = df.drop(columns=["__color__"])
+
+    # Цвет текста по фону
     def row_style(row):
-        bg = row["color"]
+        bg = row_colors.iloc[row.name]
         fg = get_text_color(bg)
         return [f"background-color: {bg}; color: {fg}" for _ in row]
-
-    # Убираем тех. колонку ДО применения стилей (важно!)
-    display_df = df.drop(columns=["color"])
 
     styles = [
         dict(selector="th", props=[("background-color", "#222"), ("color", "white")]),
