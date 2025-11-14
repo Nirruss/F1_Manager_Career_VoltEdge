@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 
 # =========================
-#  Цвета команд (по коротким названиям)
+#  Цвета команд (короткие имена)
 # =========================
 TEAM_COLORS = {
     "Ferrari": "#DC0000",
@@ -16,11 +16,10 @@ TEAM_COLORS = {
     "Williams": "#018CFF",
     "Kick Sauber": "#52E252",
     "Alpine": "#0090FF",
-    # твоя кастомная команда
-    "VoltEdge": "#F4EA00",
+    "VoltEdge": "#F4EA00",  # твоя кастомная команда
 }
 
-# Мэппинг длинных названий из Excel → коротких, понятных словарю TEAM_COLORS
+# Мэппинг длинных официальных названий → коротких
 TEAM_MAP = {
     "Oracle Red Bull Racing": "Red Bull",
     "Mercedes-AMG PETRONAS Formula One Team": "Mercedes",
@@ -37,12 +36,9 @@ TEAM_MAP = {
 
 
 # =========================
-#  Подбор цвета текста под цвет фона
+#  Цвет текста под цвет фона
 # =========================
 def get_text_color(bg: str) -> str:
-    """
-    Возвращает 'white' или 'black' в зависимости от яркости фона bg (#RRGGBB).
-    """
     if not isinstance(bg, str) or not bg.startswith("#") or len(bg) != 7:
         return "black"
     try:
@@ -52,45 +48,41 @@ def get_text_color(bg: str) -> str:
     except Exception:
         return "black"
 
-    # формула YIQ — грубая оценка яркости
     yiq = (r * 299 + g * 587 + b * 114) / 1000
-    # чем меньше значение, тем темнее фон
     return "white" if yiq < 140 else "black"
 
 
 # =========================
-#  Окраска таблиц командных данных
+#  Окраска таблиц
 # =========================
 def colorize_table(df: pd.DataFrame):
     if df is None or len(df) == 0:
         return df
 
-    # Копия таблицы
     df = df.copy()
-
-    # Нормализуем названия колонок
     df.columns = [str(c).strip() for c in df.columns]
 
-    # Приводим названия команд и получаем цвет
-    if "Команда" in df.columns:
-        df["Команда"] = df["Команда"].map(TEAM_MAP).fillna(df["Команда"])
-        df["__color__"] = df["Команда"].map(TEAM_COLORS).fillna("#FFFFFF")
+    # Ищем колонку, где хранится команда (Команда, Команды\Гонки, etc)
+    team_col = None
+    for col in df.columns:
+        if "Команда" in str(col):
+            team_col = col
+            break
+
+    if team_col is not None:
+        df["__team__"] = df[team_col].map(TEAM_MAP).fillna(df[team_col])
+        df["__color__"] = df["__team__"].map(TEAM_COLORS).fillna("#FFFFFF")
     else:
         df["__color__"] = "#FFFFFF"
 
-    # СБРАСЫВАЕМ ИНДЕКСЫ (главный фикс!)
+    # Сбрасываем индексы, чтобы стили и данные совпали
     df = df.reset_index(drop=True)
-
-    # Отдельная серия цветов
     row_colors = df["__color__"].copy()
+    display_df = df.drop(columns=["__color__"])
 
-    # Удаляем тех. колонку перед выводом
-    display_df = df.drop(columns=["__color__"]).reset_index(drop=True)
-
-    # Функция подбора цвета текста
     def row_style(row):
-        idx = row.name                  # теперь 0..N
-        bg = row_colors.iloc[idx]       # и это тоже 0..N
+        idx = row.name
+        bg = row_colors.iloc[idx]
         fg = get_text_color(bg)
         return [f"background-color: {bg}; color: {fg}" for _ in row]
 
@@ -108,6 +100,19 @@ def colorize_table(df: pd.DataFrame):
 
 
 # =========================
+#  Безопасный парсер лучшего круга
+# =========================
+def parse_lap_time(val):
+    try:
+        # Обрезаем всякую ерунду типа '+1 круг', 'выбыл' и т.п.
+        if isinstance(val, str) and ("круг" in val.lower() or "DNF" in val or "выб" in val.lower()):
+            return pd.NaT
+        return pd.to_timedelta(val)
+    except Exception:
+        return pd.NaT
+
+
+# =========================
 #  Основной рендер сезона
 # =========================
 def render_season_2024(
@@ -116,8 +121,9 @@ def render_season_2024(
 
     st.title("Сезон Формулы-1 2024")
 
-    tabs = st.tabs(["Гран-при", "WDC", "WCC", "Команды"])
-    tab_gp, tab_wdc, tab_wcc, tab_teams = tabs
+    tab_gp, tab_wdc, tab_wcc, tab_teams = st.tabs(
+        ["Гран-при", "WDC", "WCC", "Команды"]
+    )
 
     # ---------- Гран-при ----------
     with tab_gp:
@@ -127,46 +133,47 @@ def render_season_2024(
         st.subheader("Квалификация")
         st.write(colorize_table(qualifying))
 
-        # Гонка: пилоты — только фиолетовый лучший круг
+        # Гонка — пилоты (фиолетовый лучший круг)
         st.subheader("Гонка — пилоты")
 
         df = race_drivers.copy()
         df.columns = [str(c).strip() for c in df.columns]
 
         if "Лучший круг" in df.columns:
-            try:
-                times = pd.to_timedelta(df["Лучший круг"])
-                min_time = times.min()
+            times = df["Лучший круг"].apply(parse_lap_time)
+            min_time = times.min()
 
-                def style_fastest(row):
-                    try:
-                        if pd.to_timedelta(row["Лучший круг"]) == min_time:
-                            return [
-                                "background-color: #8847BD; color: white"
-                                for _ in row
-                            ]
-                        return [""] * len(row)
-                    except Exception:
-                        return [""] * len(row)
+            def style_fastest(row):
+                try:
+                    t = parse_lap_time(row["Лучший круг"])
+                    if pd.notna(t) and t == min_time:
+                        return [
+                            "background-color: #8847BD; color: white; font-weight: bold"
+                            for _ in row
+                        ]
+                    return [""] * len(row)
+                except Exception:
+                    return [""] * len(row)
 
-                st.write(df.style.apply(style_fastest, axis=1))
-            except Exception:
-                st.write(df)
+            df = df.reset_index(drop=True)
+            st.write(df.style.apply(style_fastest, axis=1))
         else:
             st.write(df)
 
-        # Гонка: команды — с цветами команд
+        # Гонка — команды (с цветами)
         st.subheader("Гонка — команды")
         st.write(colorize_table(race_teams))
 
     # ---------- WDC ----------
     with tab_wdc:
         st.subheader("Пилоты — WDC 2024")
+        # здесь нет колонки с командой → цвет будет белый, но числа уже int
         st.write(colorize_table(wdc))
 
     # ---------- WCC ----------
     with tab_wcc:
         st.subheader("Команды — WCC 2024")
+        # есть колонка 'Команды\Гонки' → будет цвет по командам
         st.write(colorize_table(wcc))
 
     # ---------- Составы ----------

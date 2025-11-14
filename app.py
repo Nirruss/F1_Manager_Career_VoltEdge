@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+from pandas.api.types import is_float_dtype
 
 from season_2024 import render_season_2024
 
@@ -26,44 +27,50 @@ gp_list = [s for s in xls.sheet_names if s not in exclude]
 
 selected_gp = st.selectbox("Выбери этап:", gp_list)
 
-df = pd.read_excel(excel_file, sheet_name=selected_gp, header=None)
+# Сырые данные выбранного этапа
+df_raw = pd.read_excel(excel_file, sheet_name=selected_gp, header=None)
 
 
 # =========================
-#  Универсальная функция извлечения таблицы
+#  Вспомогательная функция: выделить таблицу по маркеру
 # =========================
-def extract_table(df_raw: pd.DataFrame, marker: str) -> pd.DataFrame:
-    start_marker = df_raw[df_raw.eq(marker).any(axis=1)].index[0]
+def extract_table(df: pd.DataFrame, marker: str) -> pd.DataFrame:
+    start_marker = df[df.eq(marker).any(axis=1)].index[0]
 
     header_row = start_marker + 1
-    header = df_raw.iloc[header_row].tolist()
+    header = df.iloc[header_row].tolist()
 
     data_start = header_row + 1
     data_end = data_start
-
-    while data_end < len(df_raw) and not df_raw.iloc[data_end].isna().all():
+    while data_end < len(df) and not df.iloc[data_end].isna().all():
         data_end += 1
 
-    data = df_raw.iloc[data_start:data_end].copy()
-
-    # Устанавливаем названия колонок
+    data = df.iloc[data_start:data_end].copy()
     data.columns = header
-
-    # 🟣 Убираем полностью пустые колонки (из-за пустых ячеек справа)
     data = data.loc[:, ~data.columns.isna()]
-
-    # Удаляем полностью пустые строки
     data = data.dropna(how="all")
 
     return data
 
 
 # =========================
-#  Читаем все три таблицы гонки
+#  Извлечение трёх таблиц этапа
 # =========================
-qualifying = extract_table(df, "Qualification")
-race_drivers = extract_table(df, "Race_Pilots")
-race_teams = extract_table(df, "Race_Teams")
+qualifying = extract_table(df_raw, "Qualification")
+race_drivers = extract_table(df_raw, "Race_Pilots")
+race_teams = extract_table(df_raw, "Race_Teams")
+
+
+# =========================
+#  Функция очистки числовых таблиц (убираем .000000)
+# =========================
+def clean_numeric_df(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    for col in df.columns:
+        if is_float_dtype(df[col]):
+            df[col] = df[col].astype("Int64")
+    return df
+
 
 # =========================
 #  Общие таблицы сезона
@@ -71,6 +78,10 @@ race_teams = extract_table(df, "Race_Teams")
 wdc = pd.read_excel(excel_file, sheet_name="WDC_2024")
 wcc = pd.read_excel(excel_file, sheet_name="WCC_2024")
 teams = pd.read_excel(excel_file, sheet_name="Teams_2024")
+
+# Чистим числа (чтобы не было 15.000000)
+wdc = clean_numeric_df(wdc)
+wcc = clean_numeric_df(wcc)
 
 # =========================
 #  Рендер
