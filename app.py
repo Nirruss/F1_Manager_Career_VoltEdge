@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 from pandas.api.types import is_float_dtype
 
-from season_2024 import render_season_2024
+from seasons.season_2024 import render_season_2024
 
 st.set_page_config(page_title="F1 Manager Dashboard", layout="wide")
 
