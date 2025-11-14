@@ -16,6 +16,24 @@ TEAM_COLORS = {
     "Williams": "#018CFF",
     "Kick Sauber": "#52E252",
     "Alpine": "#0090FF",
+
+    # твоя кастомная команда
+    "VoltEdge": "#F4EA00",
+}
+
+# Мэппинг длинных названий → коротких
+TEAM_MAP = {
+    "Oracle Red Bull Racing": "Red Bull",
+    "Mercedes-AMG PETRONAS Formula One Team": "Mercedes",
+    "Scuderia Ferrari HP": "Ferrari",
+    "McLaren Formula 1 Team": "McLaren",
+    "Aston Martin Aramco Formula One Team": "Aston Martin",
+    "BWT Alpine F1 Team": "Alpine",
+    "Visa Cash App RB Formula One Team": "RB",
+    "Stake F1 Team Kick Sauber": "Kick Sauber",
+    "MoneyGram Haas F1 Team": "Haas",
+    "Williams Racing": "Williams",
+    "VoltEdge Quantum Racing": "VoltEdge",
 }
 
 
@@ -28,11 +46,14 @@ def colorize_table(df):
 
     df = df.copy()
 
-    # Нормализуем названия колонок (убираем пробелы, скрытые символы)
+    # Нормализуем названия колонок
     df.columns = [str(c).strip() for c in df.columns]
 
-    # Добавляем цвет команд
+    # Приводим названия команд к коротким
     if "Команда" in df.columns:
+        df["Команда"] = df["Команда"].map(TEAM_MAP).fillna(df["Команда"])
+
+        # Красим
         df["color"] = df["Команда"].map(TEAM_COLORS).fillna("#FFFFFF")
     else:
         df["color"] = "#FFFFFF"
@@ -49,7 +70,7 @@ def colorize_table(df):
 
 
 # =========================
-#  Основной рендер сезона 2024
+#  Основной рендер сезона
 # =========================
 def render_season_2024(
     qualifying, race_drivers, race_teams, wdc, wcc, teams, race_name
@@ -60,21 +81,14 @@ def render_season_2024(
     tabs = st.tabs(["Гран-при", "WDC", "WCC", "Команды"])
     tab_gp, tab_wdc, tab_wcc, tab_teams = tabs
 
-    # =========================
-    #  Гран-при
-    # =========================
     with tab_gp:
         st.subheader(f"Гран-при {race_name}")
 
-        # -------------------------
-        # Квалификация — раскрашена по командам
-        # -------------------------
+        # QUALIFICATION
         st.subheader("Квалификация")
         st.write(colorize_table(qualifying))
 
-        # -------------------------
-        # Гонка: пилоты — БЕЗ раскраски команд, только фиолетовый лучший круг
-        # -------------------------
+        # RACE DRIVERS — фиолетовый лучший круг
         st.subheader("Гонка — пилоты")
 
         df = race_drivers.copy()
@@ -87,14 +101,9 @@ def render_season_2024(
 
                 def style_fastest(row):
                     try:
-                        t = pd.to_timedelta(row["Лучший круг"])
-                        if t == min_time:
-                            return [
-                                "background-color: #8847BD; color: white; font-weight: bold"
-                                for _ in row
-                            ]
-                        else:
-                            return [""] * len(row)
+                        if pd.to_timedelta(row["Лучший круг"]) == min_time:
+                            return ["background-color: #8847BD; color: white" for _ in row]
+                        return [""] * len(row)
                     except:
                         return [""] * len(row)
 
@@ -105,29 +114,18 @@ def render_season_2024(
         else:
             st.write(df)
 
-        # -------------------------
-        # Гонка: команды — раскрашена по командам
-        # -------------------------
+        # RACE TEAMS
         st.subheader("Гонка — команды")
         st.write(colorize_table(race_teams))
 
-    # =========================
-    #  WDC
-    # =========================
     with tab_wdc:
         st.subheader("Пилоты — WDC 2024")
         st.write(colorize_table(wdc))
 
-    # =========================
-    #  WCC
-    # =========================
     with tab_wcc:
         st.subheader("Команды — WCC 2024")
         st.write(colorize_table(wcc))
 
-    # =========================
-    #  Составы команд
-    # =========================
     with tab_teams:
         st.subheader("Составы команд")
         st.write(colorize_table(teams))
