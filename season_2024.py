@@ -35,20 +35,21 @@ TEAM_MAP = {
 }
 
 # ============================================
-#  Нормализация колонок
+#  Нормализация строк и названий колонок
 # ============================================
-def normalize_col(s: str) -> str:
+def normalize_str(s: str) -> str:
     if not isinstance(s, str):
         return s
-    return (
-        s.replace("\xa0", " ")   # NBSP → обычный пробел
-         .replace("\n", " ")
-         .strip()
-         .lower()
-    )
+    s = s.replace("\xa0", " ")     # NBSP
+    s = s.replace("\u200b", "")    # zero width
+    s = s.replace("\ufeff", "")    # BOM
+    return s.strip().lower()
 
 def find_column(df, keywords):
-    normalized = {i: normalize_col(c) for i, c in enumerate(df.columns)}
+    """
+    Находит колонку по ключевым словам, игнорируя спецсимволы.
+    """
+    normalized = {i: normalize_str(c) for i, c in enumerate(df.columns)}
 
     for idx, col in normalized.items():
         for key in keywords:
@@ -83,14 +84,13 @@ def colorize_table(df: pd.DataFrame):
         return df
 
     df = df.copy()
+    df = df.applymap(lambda x: normalize_str(x) if isinstance(x, str) else x)
 
-    df = df.applymap(lambda x: str(x).replace("\xa0", " ").strip()
-                     if isinstance(x, str) else x)
-
-    team_col = find_column(df, ["команда", "team"])
+    # ключевые слова для поиска колонки команды
+    team_col = find_column(df, ["команда", "команд", "team", "\\"])
 
     if team_col:
-        normalized = df[team_col].replace("\xa0", " ", regex=True).str.strip()
+        normalized = df[team_col].apply(normalize_str)
         df["__team__"] = normalized.map(TEAM_MAP).fillna(normalized)
         df["__color__"] = df["__team__"].map(TEAM_COLORS).fillna("#FFFFFF")
     else:
@@ -119,9 +119,12 @@ def colorize_table(df: pd.DataFrame):
 def parse_lap_time(val):
     if not isinstance(val, str):
         return pd.NaT
-    s = normalize_col(val)
-    if any(x in s for x in ["круг", "выб", "dnf", "lap+1"]):
+
+    s = normalize_str(val)
+
+    if any(x in s for x in ["круг", "выб", "dnf", "+1", "lap+1"]):
         return pd.NaT
+
     try:
         return pd.to_timedelta(val)
     except:
@@ -137,18 +140,20 @@ def render_season_2024(
 
     st.title("Сезон Формулы-1 2024")
 
-    # ========= DEBUG ВСТАВКИ (ОЧЕНЬ ВАЖНО) =========
+    # ---- DEBUG ----
     st.write("DEBUG qualifying cols:", list(qualifying.columns))
     st.write("DEBUG race_drivers cols:", list(race_drivers.columns))
     st.write("DEBUG race_teams cols:", list(race_teams.columns))
     st.write("DEBUG wcc cols:", list(wcc.columns))
-    # ===============================================
+    # ---------------
 
     tab_gp, tab_wdc, tab_wcc, tab_teams = st.tabs(
         ["Гран-при", "WDC", "WCC", "Команды"]
     )
 
-    # ---------- Гран-при ----------
+    # --------------------------------------
+    #   ГРАН-ПРИ
+    # --------------------------------------
     with tab_gp:
         st.subheader(f"Гран-при {race_name}")
 
@@ -159,7 +164,7 @@ def render_season_2024(
         st.subheader("Гонка — пилоты")
         df = race_drivers.copy()
 
-        lap_col = find_column(df, ["лучший", "best", "lap"])
+        lap_col = find_column(df, ["лучший", "best", "lap", "круг"])
 
         if lap_col:
             laps = df[lap_col].apply(parse_lap_time)
