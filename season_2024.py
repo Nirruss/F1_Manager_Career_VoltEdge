@@ -77,21 +77,25 @@ def colorize_table(df: pd.DataFrame):
     else:
         df["color"] = "#FFFFFF"
 
-    styles = [
-        dict(selector="th", props=[("background-color", "#222",), ("color", "white")]),
-        dict(selector="td", props=[("padding", "6px")]),
-    ]
-
+    # Подбираем цвет текста
     def row_style(row):
         bg = row["color"]
         fg = get_text_color(bg)
         return [f"background-color: {bg}; color: {fg}" for _ in row]
 
+    # Убираем тех. колонку ДО применения стилей (важно!)
+    display_df = df.drop(columns=["color"])
+
+    styles = [
+        dict(selector="th", props=[("background-color", "#222"), ("color", "white")]),
+        dict(selector="td", props=[("padding", "6px")]),
+    ]
+
     return (
-        df.style.apply(row_style, axis=1)
+        display_df.style
+        .apply(row_style, axis=1)
         .set_table_styles(styles)
         .hide(axis="index")
-        .hide(columns=["color"])
     )
 
 
