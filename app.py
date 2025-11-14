@@ -19,47 +19,47 @@ except Exception:
     st.stop()
 
 # =========================
-#  Список этапов (листы, кроме служебных)
+#  Список этапов
 # =========================
 exclude = {"Teams_2024", "WDC_2024", "WCC_2024", "GP_List_2024"}
 gp_list = [s for s in xls.sheet_names if s not in exclude]
 
 selected_gp = st.selectbox("Выбери этап:", gp_list)
 
-# Загружаем выбранный лист как «сырой» DataFrame без шапки
 df = pd.read_excel(excel_file, sheet_name=selected_gp, header=None)
 
 
 # =========================
-#  Вспомогательная функция: достать таблицу по маркеру
-#  (Qualification / Race_Pilots / Race_Teams)
+#  Универсальная функция извлечения таблицы
 # =========================
 def extract_table(df_raw: pd.DataFrame, marker: str) -> pd.DataFrame:
-    # Находим строку, где стоит маркер (например, "Qualification")
     start_marker = df_raw[df_raw.eq(marker).any(axis=1)].index[0]
 
-    # Через одну строку после маркера — заголовки
     header_row = start_marker + 1
     header = df_raw.iloc[header_row].tolist()
 
-    # Данные начинаются ещё через одну строку
     data_start = header_row + 1
     data_end = data_start
 
-    # Ищем конец таблицы: первая полностью пустая строка
     while data_end < len(df_raw) and not df_raw.iloc[data_end].isna().all():
         data_end += 1
 
-    # Формируем итоговую таблицу
     data = df_raw.iloc[data_start:data_end].copy()
+
+    # Устанавливаем названия колонок
     data.columns = header
+
+    # 🟣 Убираем полностью пустые колонки (из-за пустых ячеек справа)
+    data = data.loc[:, ~data.columns.isna()]
+
+    # Удаляем полностью пустые строки
     data = data.dropna(how="all")
 
     return data
 
 
 # =========================
-#  Извлечение трёх таблиц по гонке
+#  Читаем все три таблицы гонки
 # =========================
 qualifying = extract_table(df, "Qualification")
 race_drivers = extract_table(df, "Race_Pilots")
@@ -73,7 +73,7 @@ wcc = pd.read_excel(excel_file, sheet_name="WCC_2024")
 teams = pd.read_excel(excel_file, sheet_name="Teams_2024")
 
 # =========================
-#  Рендер страницы сезона
+#  Рендер
 # =========================
 render_season_2024(
     qualifying,
@@ -82,7 +82,7 @@ render_season_2024(
     wdc,
     wcc,
     teams,
-    selected_gp,
+    selected_gp
 )
 
 st.markdown("---")
