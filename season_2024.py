@@ -40,7 +40,6 @@ TEAM_MAP = {
 def get_text_color(bg):
     if not isinstance(bg, str) or not bg.startswith("#"):
         return "black"
-
     try:
         r = int(bg[1:3], 16)
         g = int(bg[3:5], 16)
@@ -48,12 +47,13 @@ def get_text_color(bg):
     except:
         return "black"
 
+    # контраст
     yiq = (r * 299 + g * 587 + b * 114) / 1000
     return "white" if yiq < 150 else "black"
 
 
 # =========================
-#  Функция окраски таблиц
+#  Окраска таблиц команд
 # =========================
 def colorize_table(df: pd.DataFrame):
     if df is None or len(df) == 0:
@@ -62,10 +62,10 @@ def colorize_table(df: pd.DataFrame):
     df = df.copy()
     df.columns = [str(c).strip() for c in df.columns]
 
-    # нормализация всех пробелов / спецсимволов
+    # Нормализация строк
     df = df.applymap(lambda x: str(x).replace("\xa0", " ").strip() if isinstance(x, str) else x)
 
-    # Ищем колонку с командой
+    # Ищем колонку с названием команды
     team_col = None
     for col in df.columns:
         if "Команда" in col:
@@ -75,7 +75,7 @@ def colorize_table(df: pd.DataFrame):
             team_col = col
             break
 
-    # Названия команд → короткие → цвет
+    # Применяем цвета
     if team_col:
         df["__team__"] = df[team_col].map(TEAM_MAP).fillna(df[team_col])
         df["__color__"] = df["__team__"].map(TEAM_COLORS).fillna("#FFFFFF")
@@ -84,7 +84,6 @@ def colorize_table(df: pd.DataFrame):
 
     df = df.reset_index(drop=True)
     row_colors = df["__color__"]
-
     display_df = df.drop(columns=["__color__", "__team__"], errors="ignore")
 
     def row_style(row):
@@ -92,15 +91,13 @@ def colorize_table(df: pd.DataFrame):
         fg = get_text_color(bg)
         return [f"background-color: {bg}; color: {fg}" for _ in row]
 
-    styles = [
-        dict(selector="th", props=[("background-color", "#222"), ("color", "white")]),
-        dict(selector="td", props=[("padding", "6px")]),
-    ]
-
     return (
         display_df.style
         .apply(row_style, axis=1)
-        .set_table_styles(styles)
+        .set_table_styles([
+            dict(selector="th", props=[("background-color", "#222"), ("color", "white")]),
+            dict(selector="td", props=[("padding", "6px")]),
+        ])
         .hide(axis="index")
     )
 
@@ -121,12 +118,11 @@ def parse_lap_time(val):
 
 
 # =========================
-#  Основной рендер сезона
+#  Основной рендер
 # =========================
 def render_season_2024(
     qualifying, race_drivers, race_teams, wdc, wcc, teams, race_name
 ):
-
     st.title("Сезон Формулы-1 2024")
 
     tab_gp, tab_wdc, tab_wcc, tab_teams = st.tabs(
@@ -141,31 +137,44 @@ def render_season_2024(
         st.subheader("Квалификация")
         st.write(colorize_table(qualifying))
 
-        # Гонка — пилоты (фиолетовый лучший круг)
+        # -------- Гонка — пилоты ------------
         st.subheader("Гонка — пилоты")
 
         df = race_drivers.copy()
         df.columns = [str(c).strip() for c in df.columns]
 
         if "Лучший круг" in df.columns:
-            times = df["Лучший круг"].apply(parse_lap_time)
-            min_time = times.min()
+            laps = df["Лучший круг"].apply(parse_lap_time)
+            valid = laps.dropna()
 
-            def style_fastest(row):
-                t = parse_lap_time(row["Лучший круг"])
-                if pd.notna(t) and t == min_time:
-                    return [
-                        "background-color: #8847BD; color: white; font-weight: bold"
-                        for _ in row
-                    ]
-                return [""] * len(row)
+            if len(valid) > 0:
+                min_lap = valid.min()
 
-            df = df.reset_index(drop=True)
-            st.write(df.style.apply(style_fastest, axis=1))
+                # Маска строк с лучшим кругом
+                fastest_mask = laps == min_lap
+
+                def highlight_fastest(col):
+                    # Красим только колонку "Лучший круг"
+                    if col.name != "Лучший круг":
+                        return [""] * len(col)
+
+                    out = []
+                    for i, v in enumerate(col):
+                        if fastest_mask.iloc[i]:
+                            out.append("background-color: #8847BD; color: white; font-weight: bold")
+                        else:
+                            out.append("")
+                    return out
+
+                df = df.reset_index(drop=True)
+                st.write(df.style.apply(highlight_fastest, axis=0))
+            else:
+                st.write(df)
+
         else:
             st.write(df)
 
-        # Гонка — команды
+        # Гонка команды
         st.subheader("Гонка — команды")
         st.write(colorize_table(race_teams))
 
