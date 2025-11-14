@@ -84,14 +84,17 @@ def colorize_table(df: pd.DataFrame):
         return df
 
     df = df.copy()
-    df = df.applymap(lambda x: normalize_str(x) if isinstance(x, str) else x)
 
-    # ключевые слова для поиска колонки команды
+    # ❗ НОРМАЛИЗУЕМ ТОЛЬКО НАЗВАНИЯ КОЛОНОК, НЕ ЗНАЧЕНИЯ
+    df.columns = [normalize_str(c) for c in df.columns]
+
+    # ищем колонку команды
     team_col = find_column(df, ["команда", "команд", "team", "\\"])
 
+    # ВАЖНО: не трогаем строки, только нормализуем названия
     if team_col:
-        normalized = df[team_col].apply(normalize_str)
-        df["__team__"] = normalized.map(TEAM_MAP).fillna(normalized)
+        raw_names = df[team_col]  # значения НЕ трогаем
+        df["__team__"] = raw_names.map(TEAM_MAP).fillna(raw_names)
         df["__color__"] = df["__team__"].map(TEAM_COLORS).fillna("#FFFFFF")
     else:
         df["__color__"] = "#FFFFFF"
@@ -108,8 +111,8 @@ def colorize_table(df: pd.DataFrame):
 
     return (
         display_df.style
-        .apply(row_style, axis=1)
-        .hide(axis="index")
+            .apply(row_style, axis=1)
+            .hide(axis="index")
     )
 
 
