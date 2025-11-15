@@ -17,12 +17,7 @@ def normalize_cols(s):
 
 
 def find_column(df, keywords):
-    """
-    Ищет колонку по ключевым словам:
-    keywords = ["команда", "team"]
-    """
     norm = {col: normalize_cols(col) for col in df.columns}
-
     for col, n in norm.items():
         for key in keywords:
             if key in n:
@@ -61,12 +56,11 @@ TEAM_MAP = {
     "voltedge quantum racing": "voltedge",
 }
 
-# =====================================================
-# ЦВЕТ ТЕКСТА ДЛЯ КОНТРАСТА
-# =====================================================
+
+# ========================================
+# КОНТРАСТНЫЙ ТЕКСТ
+# ========================================
 def get_text_color(bg):
-    if not isinstance(bg, str) or not bg.startswith("#"):
-        return "black"
     try:
         r = int(bg[1:3], 16)
         g = int(bg[3:5], 16)
@@ -77,20 +71,17 @@ def get_text_color(bg):
     return "white" if yiq < 150 else "black"
 
 
-# =====================================================
+# ========================================
 # ОКРАСКА ТАБЛИЦ
-# =====================================================
+# ========================================
 def colorize_table(df: pd.DataFrame):
     if df is None or df.empty:
         return df
 
     df = df.copy()
-
-    # нормализация значений
     df = df.applymap(lambda x: str(x).replace("\xa0", " ").strip()
                      if isinstance(x, str) else x)
 
-    # ищем колонку команды
     team_col = find_column(df, ["команда", "team"])
 
     if team_col:
@@ -113,31 +104,25 @@ def colorize_table(df: pd.DataFrame):
     return display_df.style.apply(row_style, axis=1).hide(axis="index")
 
 
-# =====================================================
+# ========================================
 # РАЗБОР ЛУЧШЕГО КРУГА
-# =====================================================
+# ========================================
 def parse_lap_time(val):
     if not isinstance(val, str):
         return pd.NaT
-
     s = normalize_cols(val)
     if any(x in s for x in ["круг", "lap", "dnf", "выб"]):
         return pd.NaT
-
     try:
         return pd.to_timedelta(val)
     except:
         return pd.NaT
 
 
-# =====================================================
-# ДЛЯ WDC — КАРТА ПИЛОТ → КОМАНДА
-# =====================================================
+# ========================================
+# КАРТА ПИЛОТ → КОМАНДА
+# ========================================
 def build_pilot_team_map(teams_df: pd.DataFrame):
-    """
-    Берём таблицу Состав команд и строим структуру:
-    pilot → team
-    """
     if teams_df is None or teams_df.empty:
         return {}
 
@@ -149,42 +134,44 @@ def build_pilot_team_map(teams_df: pd.DataFrame):
         return {}
 
     mapping = {}
-
     for _, row in teams_df.iterrows():
         pilot = str(row[pilot_col]).strip()
         team_raw = normalize_cols(str(row[team_col]).strip())
         team = TEAM_MAP.get(team_raw, team_raw)
         mapping[pilot] = team
-
     return mapping
 
 
-# =====================================================
-# ЗАГРУЗКА SEASON DATA
-# =====================================================
+# ========================================
+# ЗАГРУЗКА СЕЗОНА (ГЛАВНОЕ)
+# ========================================
 def load_season_data(xls_path: str):
 
     xls = pd.ExcelFile(xls_path)
 
     season_year = xls_path.split("_")[-1].split(".")[0]
-    gp_sheet = f"GP_List_{season_year}"
 
+    # ----- GP LIST -----
+    gp_sheet = f"GP_List_{season_year}"
     gp_df = pd.read_excel(xls, gp_sheet)
     gp_df.columns = ["code", "name"]
 
-    gp_map = dict(zip(
+    gp_list = dict(zip(
         gp_df["code"].astype(str).str.strip(),
         gp_df["name"].astype(str).str.strip()
     ))
 
+    # ----- WDC / WCC -----
     wdc = pd.read_excel(xls, f"WDC_{season_year}")
     wcc = pd.read_excel(xls, f"WCC_{season_year}")
+
+    # ----- TEAMS -----
     teams = pd.read_excel(xls, f"Teams_{season_year}")
 
-    # грузим гонки
+    # ----- ГРАН-ПРИ -----
     grand_prix = {}
 
-    for code in gp_map:
+    for code in gp_list:
         if code not in xls.sheet_names:
             continue
 
@@ -227,9 +214,9 @@ def load_season_data(xls_path: str):
         grand_prix[code] = sections
 
     return {
-        "gp_map": gp_map,
+        "gp_list": gp_list,
+        "grand_prix": grand_prix,
         "wdc": wdc,
         "wcc": wcc,
         "teams": teams,
-        "grand_prix": grand_prix,
     }
