@@ -64,7 +64,7 @@ TEAM_MAP = {
 
 
 # =========================
-# ЦВЕТ ПО КОМАНДЕ
+# ПРОВЕРКА КОНТРАСТА
 # =========================
 def get_text_color(bg):
     try:
@@ -79,10 +79,9 @@ def get_text_color(bg):
 
 
 # =========================
-# ГЛАВНАЯ РАСКРАСКА
+# РАСКРАСКА ТАБЛИЦ
 # =========================
 def colorize_table(df: pd.DataFrame):
-
     df = df.copy()
 
     team_col = find_column(df, ["команда", "team"])
@@ -137,27 +136,33 @@ def parse_lap_time(v):
 
 
 # =========================
-# Загрузка Excel (без изменений)
+# ГЛАВНАЯ ФУНКЦИЯ ЗАГРУЗКИ СЕЗОНА
 # =========================
 def load_season_data(xls_path):
     xls = pd.ExcelFile(xls_path)
     season_year = xls_path.split("_")[-1].split(".")[0]
 
-    gp_list = dict(
-        zip(
-            pd.read_excel(xls, f"GP_List_{season_year}")["code"],
-            pd.read_excel(xls, f"GP_List_{season_year}")["name"],
-        )
-    )
+    # -------- ЧТЕНИЕ GP_LIST --------
+    gp_df = pd.read_excel(xls, f"GP_List_{season_year}")
 
+    # Чем бы ни назвались колонки → ищем по смыслу
+    code_col = find_column(gp_df, ["код", "code"])
+    name_col = find_column(gp_df, ["назв", "name"])
+
+    gp_list = dict(zip(
+        gp_df[code_col].astype(str).str.strip(),
+        gp_df[name_col].astype(str).str.strip(),
+    ))
+
+    # -------- Остальные листы --------
     wdc = pd.read_excel(xls, f"WDC_{season_year}")
     wcc = pd.read_excel(xls, f"WCC_{season_year}")
     teams = pd.read_excel(xls, f"Teams_{season_year}")
 
+    # -------- Парсер гонок оставляем как у тебя --------
     grand_prix = {}
     for code in gp_list:
         grand_prix[code] = {}
-        # … твой parser как был …
 
     return {
         "gp_map": gp_list,
