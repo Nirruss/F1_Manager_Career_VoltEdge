@@ -189,27 +189,35 @@ def load_season_data(xls_path: str):
                 continue
 
             # ---------- QUALIFICATION ----------
-            if c0.startswith("qualification"):
+            if c0 == "qualification":
                 if key and temp:
                     sections[key] = pd.DataFrame(temp)
                 key = "qualifying"
                 temp = []
+                skip_header = True
                 continue
 
             # ---------- RACE PILOTS ----------
-            if c0.startswith("race_pilots") or c0.startswith("race pilots"):
+            if c0 == "race_pilots":
                 if key and temp:
                     sections[key] = pd.DataFrame(temp)
                 key = "race_drivers"
                 temp = []
+                skip_header = True
                 continue
 
             # ---------- RACE TEAMS ----------
-            if c0.startswith("race_teams") or c0.startswith("race teams"):
+            if c0 == "race_teams":
                 if key and temp:
                     sections[key] = pd.DataFrame(temp)
                 key = "race_teams"
                 temp = []
+                skip_header = True
+                continue
+
+            # Пропускаем строку-шапку после объявления блока
+            if 'skip_header' in locals() and skip_header:
+                skip_header = False
                 continue
 
             # Внутри блока — копим строки
