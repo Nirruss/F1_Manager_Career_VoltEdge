@@ -194,7 +194,11 @@ def load_season_data(xls_path: str):
                 continue
 
             # -------- Блок QUALIFICATION --------
-            if "qualification" in row_text:
+            if (
+                    "qualificat" in row_text  # встречается у тебя
+                    or "qualification" in row_text
+                    or "qualify" in row_text
+            ):
                 if key and temp:
                     sections[key] = pd.DataFrame(temp)
                 key = "qualifying"
