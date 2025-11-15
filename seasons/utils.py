@@ -6,13 +6,17 @@ def normalize_cols(s):
     if not isinstance(s, str):
         return s
 
-    # убираем ВСЕ типы пробелов
-    s = re.sub(r"\p{Z}+", " ", s)
-    s = s.replace("\u200b", "")   # zero-width space
-    s = s.replace("\xa0", " ")    # NBSP
-    s = s.replace("\u2009", " ")  # thin space
-    s = s.replace("\u2007", " ")  # figure space
-    s = s.replace("\u202F", " ")  # narrow no-break space
+    # убираем неразрывные пробелы, zero-width и прочий мусор
+    s = (
+        s.replace("\xa0", " ")
+         .replace("\u200b", "")
+         .replace("\r", " ")
+         .replace("\n", " ")
+    )
+
+    # убираем все двойные пробелы
+    while "  " in s:
+        s = s.replace("  ", " ")
 
     return s.strip().lower()
 
