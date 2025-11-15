@@ -143,7 +143,7 @@ def build_pilot_team_map(teams_df: pd.DataFrame):
 
 
 # ========================================
-# ЗАГРУЗКА СЕЗОНА (ГЛАВНОЕ)
+# ГЛАВНЫЙ ПАРСЕР СЕЗОНА — АДАПТИРОВАН ПОД ТВОЙ EXCEL
 # ========================================
 def load_season_data(xls_path: str):
 
@@ -184,11 +184,11 @@ def load_season_data(xls_path: str):
         for _, row in df.iterrows():
             c0 = str(row.iloc[0]).strip().lower()
 
-            # пропуск пустых строк
+            # пустые строки — пропускаем
             if c0 == "" or c0 == "nan":
                 continue
 
-            # ---------- БЛОК QUALIFICATION ----------
+            # ---------- QUALIFICATION ----------
             if c0.startswith("qualification"):
                 if key and temp:
                     sections[key] = pd.DataFrame(temp)
@@ -196,27 +196,27 @@ def load_season_data(xls_path: str):
                 temp = []
                 continue
 
-            # ---------- БЛОК RACE PILOTS ----------
-            if c0.startswith("race_pilots"):
+            # ---------- RACE PILOTS ----------
+            if c0.startswith("race_pilots") or c0.startswith("race pilots"):
                 if key and temp:
                     sections[key] = pd.DataFrame(temp)
                 key = "race_drivers"
                 temp = []
                 continue
 
-            # ---------- БЛОК RACE TEAMS ----------
-            if c0.startswith("race_teams"):
+            # ---------- RACE TEAMS ----------
+            if c0.startswith("race_teams") or c0.startswith("race teams"):
                 if key and temp:
                     sections[key] = pd.DataFrame(temp)
                 key = "race_teams"
                 temp = []
                 continue
 
-            # Если мы сейчас внутри блока — добавляем строку
+            # Внутри блока — копим строки
             if key is not None:
                 temp.append(list(row))
 
-        # Закрываем последний блок
+        # закрываем последний блок
         if key and temp:
             sections[key] = pd.DataFrame(temp)
 
@@ -230,4 +230,3 @@ def load_season_data(xls_path: str):
         "wcc": wcc,
         "teams": teams,
     }
-
