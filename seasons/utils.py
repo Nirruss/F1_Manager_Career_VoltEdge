@@ -19,12 +19,30 @@ def normalize_cols(s):
 
 
 def find_column(df, keywords):
-    norm = {col: normalize_cols(col) for col in df.columns}
+    """
+    Ищет колонку по ключевым словам в НАЗВАНИЯХ столбцов.
+    Возвращает оригинальное имя столбца или None.
+    """
+    norm = {}
+
+    # нормализуем названия колонок в строку
+    for col in df.columns:
+        if isinstance(col, str):
+            n = normalize_cols(col)
+        else:
+            # на всякий случай: числа, None и т.п.
+            n = str(col).strip().lower()
+        norm[col] = n
+
     for col, n in norm.items():
+        if not isinstance(n, str):
+            continue
         for key in keywords:
             if key in n:
                 return col
+
     return None
+
 
 
 # ========================================
