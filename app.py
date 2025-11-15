@@ -21,6 +21,7 @@ xls_path = excel_files[season_choice]
 
 # Загружаем данные сезона
 season_data = load_season_data(xls_path)
+st.write("SEASON DATA KEYS:", season_data.keys())   # ОТЛАДКА
 
 # gp_map = {"BAH": "Бахрейн", ...}
 gp_map = season_data["gp_map"]
