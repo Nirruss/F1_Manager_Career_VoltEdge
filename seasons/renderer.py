@@ -2,36 +2,20 @@ import streamlit as st
 import pandas as pd
 
 from seasons.utils import (
-    load_season_data,
     colorize_table,
+    normalize_cols,
+    build_pilot_team_map,
     parse_lap_time,
-    normalize_cols
 )
 
-
-
-def split_gp_blocks(df):
-    df = df.dropna(how="all")
-    headers = df.iloc[0].tolist()
-
-    block_indices = [i for i, x in enumerate(headers) if isinstance(x, str) and x.strip() != ""]
-
-    if len(block_indices) < 3:
-        return None, None, None
-
-    q_start = block_indices[0]
-    r1_start = block_indices[1]
-    r2_start = block_indices[2]
-
-    qualifying = df.iloc[:, q_start:r1_start]
-    race_drivers = df.iloc[:, r1_start:r2_start]
-    race_teams = df.iloc[:, r2_start:]
-
-    qualifying = qualifying.drop(0).reset_index(drop=True)
-    race_drivers = race_drivers.drop(0).reset_index(drop=True)
-    race_teams = race_teams.drop(0).reset_index(drop=True)
-
-    return qualifying, race_drivers, race_teams
+# универсальный нормализатор DataFrame
+def normalize_df(df: pd.DataFrame):
+    if df is None or df.empty:
+        return df
+    df = df.copy()
+    df.columns = [normalize_cols(c) for c in df.columns]
+    df = df.applymap(lambda x: normalize_cols(x) if isinstance(x, str) else x)
+    return df
 
 
 def render_season(season_name, race_code, data):
