@@ -21,7 +21,6 @@ xls_path = excel_files[season_choice]
 
 # Загружаем данные сезона
 season_data = load_season_data(xls_path)
-st.write("SEASON DATA KEYS:", season_data.keys())   # ОТЛАДКА
 
 # gp_map = {"BAH": "Бахрейн", ...}
 gp_map = season_data["gp_map"]
@@ -37,12 +36,8 @@ race_name = st.sidebar.selectbox(
 # Ищем КОД гонки по имени
 race_code = next(code for code, name in gp_map.items() if name == race_name)
 
-st.subheader("DEBUG GP BLOCKS")
-st.write("Race code:", race_code)
-st.write("Blocks:", season_data["grand_prix"][race_code].keys())
-
 # -------------------------
-# РЕНДЕРИНГ СТРАНИЦЫ
+# Рендеринг
 # -------------------------
 render_season(
     season_name=season_choice,
