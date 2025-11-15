@@ -16,7 +16,7 @@ excel_files = {
 xls_path = excel_files[season_choice]
 
 # ❗ передаём ГОД отдельно
-season_data = load_season_data(xls_path, season_choice)
+season_data = load_season_data(xls_path)
 
 # список гонок
 gp_list = season_data["gp_list"]
