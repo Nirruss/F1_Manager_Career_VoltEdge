@@ -20,7 +20,14 @@ season_data = load_season_data(xls_path)
 
 # список гонок
 gp_list = season_data["gp_list"]
-race_choice = st.sidebar.selectbox("Выбор Гран-при", gp_list["Название"])
+race_name = st.sidebar.selectbox(
+    "Выбор Гран-при",
+    list(gp_list.values())
+)
+
+# получаем код обратно
+race_code = next(code for code, name in gp_list.items() if name == race_name)
+
 
 gp_code = gp_list.set_index("Название").loc[race_choice, "Код"]
 
