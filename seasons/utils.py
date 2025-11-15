@@ -1,21 +1,27 @@
 import pandas as pd
 import numpy as np
-import re
+import regex as re
 
-# ========================================
-# НОРМАЛИЗАЦИЯ ТЕКСТА
-# ========================================
 def normalize_cols(s):
     if not isinstance(s, str):
         return s
-    return (
-        s.replace("\xa0", " ")
-         .replace("\u200b", "")     # zero-width space
-         .replace("\r", " ")
-         .replace("\n", " ")
-         .strip()
-         .lower()
-    )
+
+    # убираем ВСЕ типы пробелов
+    s = re.sub(r"\p{Z}+", " ", s)
+    s = s.replace("\u200b", "")   # zero-width space
+    s = s.replace("\xa0", " ")    # NBSP
+    s = s.replace("\u2009", " ")  # thin space
+    s = s.replace("\u2007", " ")  # figure space
+    s = s.replace("\u202F", " ")  # narrow no-break space
+
+    return s.strip().lower()
+
+
+def normalize_team_name(s: str):
+    s = normalize_cols(s)
+    # чтобы было прям безопасно — убираем двойные пробелы
+    s = re.sub(r"\s+", " ", s)
+    return s
 
 
 def find_column(df, keywords):
@@ -108,7 +114,8 @@ def colorize_table(df: pd.DataFrame):
         # нормализуем ТОЛЬКО значение, НЕ заголовок
         normalized = df[team_col].astype(str).apply(normalize_cols)
 
-        mapped = normalized.map(TEAM_MAP).fillna(normalized)
+        mapped = df[team_col].astype(str).apply(normalize_team_name).map(TEAM_MAP)
+
 
         df["__color__"] = mapped.map(TEAM_COLORS).fillna("#FFFFFF")
     else:

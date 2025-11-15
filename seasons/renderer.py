@@ -17,11 +17,11 @@ def normalize_df(df: pd.DataFrame):
 
     df = df.copy()
 
-    # Заголовки → нормализуем + Первую букву делаем заглавной
+    # Заголовки → нормализуем + заглавная буква
     clean_cols = []
     for c in df.columns:
         norm = normalize_cols(c) if isinstance(c, str) else str(c).lower()
-        clean_cols.append(norm.title())    # "Пилот", "Команда", "Испания"
+        clean_cols.append(norm.title())
     df.columns = clean_cols
 
     # Содержимое → нормализуем строки
@@ -69,6 +69,14 @@ def render_season(season_name, race_code, data):
         if race_drivers is not None:
             race_drivers = normalize_df(race_drivers)
 
+            # ДОБАВЛЯЕМ КОМАНДУ (чтобы colorize_table знал какой цвет дать)
+            pilot_col = find_column(race_drivers, ["пилот", "pilot", "driver"])
+            if pilot_col:
+                race_drivers["Команда"] = race_drivers[pilot_col].map(
+                    lambda x: normalize_cols(pilot_to_team.get(x, ""))
+                )
+
+            # выделение лучшего круга
             lap_col = find_column(race_drivers, ["лучший", "best", "lap"])
 
             if lap_col:
@@ -87,11 +95,11 @@ def render_season(season_name, race_code, data):
                             for x in col
                         ]
 
-                    st.write(race_drivers.style.apply(style_fastest, axis=0))
+                    st.write(colorize_table(race_drivers).apply(style_fastest, axis=0))
                 else:
-                    st.write(race_drivers)
+                    st.write(colorize_table(race_drivers))
             else:
-                st.write(race_drivers)
+                st.write(colorize_table(race_drivers))
         else:
             st.warning("Нет данных о пилотах гонки")
 
@@ -114,7 +122,7 @@ def render_season(season_name, race_code, data):
 
         wdc = wdc.copy()
 
-        # ЧИСТИМ ЧИСЛА: если не число → оставляем как есть
+        # чистим числа
         for col in wdc.columns:
             if col in ["Пилот", "Команда"]:
                 continue
@@ -133,7 +141,9 @@ def render_season(season_name, race_code, data):
 
         pilot_col = find_column(wdc, ["пилот", "pilot"])
         if pilot_col:
-            wdc["Команда"] = wdc[pilot_col].map(pilot_to_team)
+            wdc["Команда"] = wdc[pilot_col].map(
+                lambda x: normalize_cols(pilot_to_team.get(x, ""))
+            )
 
         st.write(colorize_table(wdc))
 
@@ -152,13 +162,18 @@ def render_season(season_name, race_code, data):
                 continue
 
             def try_int(val):
-                if pd.isna(val): return pd.NA
-                if isinstance(val, str) and val.upper() == "DNF": return val
-                try: return int(float(val))
-                except: return val
+                if pd.isna(val):
+                    return pd.NA
+                if isinstance(val, str) and val.upper() == "DNF":
+                    return val
+                try:
+                    return int(float(val))
+                except:
+                    return val
 
             wcc[col] = wcc[col].apply(try_int)
 
+        # WCC тоже красим
         st.write(colorize_table(wcc))
 
 
