@@ -3,19 +3,16 @@ import numpy as np
 import re
 
 # ========================================
-# НОРМАЛИЗАЦИЯ ТЕКСТА (МАКСИМАЛЬНО ЖЁСТКАЯ)
+# НОРМАЛИЗАЦИЯ ТЕКСТА
 # ========================================
 def normalize_cols(s):
     if not isinstance(s, str):
         return s
     return (
         s.replace("\xa0", " ")
-         .replace("\u200b", "")   # zero-width space
-         .replace("\u200e", "")   # LTR mark
-         .replace("\u200f", "")   # RTL mark
+         .replace("\u200b", "")     # zero-width space
          .replace("\r", " ")
          .replace("\n", " ")
-         .replace("\t", " ")
          .strip()
          .lower()
     )
@@ -70,7 +67,7 @@ def get_text_color(bg):
         r = int(bg[1:3], 16)
         g = int(bg[3:5], 16)
         b = int(bg[5:7], 16)
-    except:
+    except Exception:
         return "black"
     yiq = (r * 299 + g * 587 + b * 114) / 1000
     return "white" if yiq < 150 else "black"
@@ -98,6 +95,7 @@ def colorize_table(df: pd.DataFrame):
 
     df = df.reset_index(drop=True)
     row_colors = df["__color__"]
+
     display_df = df.drop(columns=["__color__"], errors="ignore")
 
     def row_style(row):
@@ -119,7 +117,7 @@ def parse_lap_time(val):
         return pd.NaT
     try:
         return pd.to_timedelta(val)
-    except:
+    except Exception:
         return pd.NaT
 
 
@@ -147,12 +145,11 @@ def build_pilot_team_map(teams_df: pd.DataFrame):
 
 
 # ========================================
-# ПАРСЕР ГРАН-ПРИ — УЛЬТРА-НАДЁЖНЫЙ
+# ПАРСЕР СЕЗОНА
 # ========================================
 def load_season_data(xls_path: str):
 
     xls = pd.ExcelFile(xls_path)
-
     season_year = xls_path.split("_")[-1].split(".")[0]
 
     # ----- GP LIST -----
@@ -179,28 +176,26 @@ def load_season_data(xls_path: str):
         if code not in xls.sheet_names:
             continue
 
-        df = pd.read_excel(xls, code)
+        # читаем целиком без заголовков
+        df = pd.read_excel(xls, code, header=None)
 
         sections = {}
         key = None
         temp = []
         skip_header = False
 
+        # --- основной проход по строкам ---
         for _, row in df.iterrows():
-
-            # Берём ВСЮ строку, а не только первый столбец
             row_text = " ".join(
-                normalize_cols(str(x)) for x in row.values
-                if isinstance(x, str) and normalize_cols(str(x)) not in ["", "nan"]
-            )
+                normalize_cols(str(x)) for x in row.values if pd.notna(x)
+            ).strip()
 
-            if row_text == "":
+            if row_text == "" or row_text == "nan":
                 continue
 
-            # -------- QUALIFICATION --------
-            # -------- Блок QUALIFICATION --------
+            # -------- Блок QUALIFICATION (по ключевому слову) --------
             if any(x in row_text for x in [
-                "qualificat",  # твоя обрезанная версия
+                "qualificat",       # в т.ч. обрезанный заголовок
                 "qualification",
                 "qualify",
                 "квалиф",
@@ -212,7 +207,7 @@ def load_season_data(xls_path: str):
                 skip_header = True
                 continue
 
-            # -------- RACE DRIVERS --------
+            # -------- Блок RACE DRIVERS --------
             if "race_pilots" in row_text or "race drivers" in row_text:
                 if key and temp:
                     sections[key] = pd.DataFrame(temp)
@@ -221,7 +216,7 @@ def load_season_data(xls_path: str):
                 skip_header = True
                 continue
 
-            # -------- RACE TEAMS --------
+            # -------- Блок RACE TEAMS --------
             if "race_teams" in row_text or "race teams" in row_text:
                 if key and temp:
                     sections[key] = pd.DataFrame(temp)
@@ -230,18 +225,45 @@ def load_season_data(xls_path: str):
                 skip_header = True
                 continue
 
-            # пропускаем строку-шапку после блока
+            # пропускаем строку-шапку сразу после объявления блока
             if skip_header:
                 skip_header = False
                 continue
 
-            # добавляем строки блока
+            # копим строки внутри текущего блока
             if key is not None:
                 temp.append(list(row))
 
         # закрываем последний блок
         if key and temp:
             sections[key] = pd.DataFrame(temp)
+
+        # ---------- ФОЛБЭК: если квалификация не нашлась ----------
+        if "qualifying" not in sections:
+            qual_header_idx = None
+            race_pilots_row_idx = None
+
+            for idx, row in df.iterrows():
+                norm_cells = [normalize_cols(str(x)) for x in row.values if pd.notna(x)]
+                joined = " ".join(norm_cells)
+
+                # первая шапка с "позиция" — считаем её шапкой квалификации
+                if qual_header_idx is None and any(
+                    ("позиция" in c) or ("position" in c) for c in norm_cells
+                ):
+                    qual_header_idx = idx
+                    continue
+
+                # первая строка с race_pilots — начало блока гонки пилотов
+                if qual_header_idx is not None and (
+                    "race_pilots" in joined or "race drivers" in joined
+                ):
+                    race_pilots_row_idx = idx
+                    break
+
+            if qual_header_idx is not None and race_pilots_row_idx is not None:
+                qual_df = df.iloc[qual_header_idx + 1: race_pilots_row_idx].reset_index(drop=True)
+                sections["qualifying"] = qual_df
 
         grand_prix[code] = sections
 
