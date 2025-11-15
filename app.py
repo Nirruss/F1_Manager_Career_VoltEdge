@@ -1,28 +1,32 @@
 import streamlit as st
-from seasons.loader import load_season
+import pandas as pd
 from seasons.renderer import render_season
+from seasons.utils import load_season_data
 
-st.set_page_config(layout="wide")
-
-# =========================
-#  ЗАГРУЗКА СЕЗОНОВ
-# =========================
-SEASONS = {
-    "2024": "F1_Manager_2024.xlsx",
-    "2025": "F1_Manager_2025.xlsx",
-}
+st.set_page_config(page_title="F1 Manager Dashboard", layout="wide")
 
 st.sidebar.title("Выбор сезона")
-season_choice = st.sidebar.selectbox("Выбери сезон", list(SEASONS.keys()))
+season_choice = st.sidebar.selectbox("Сезон", ["2024", "2025"])
 
-season_data = load_season(SEASONS[season_choice])
+# Загружаем Excel нужного сезона
+excel_files = {
+    "2024": "F1_Manager_2024.xlsx",
+    "2025": "F1_Manager_2025.xlsx"
+}
 
-st.sidebar.title("Выбор Гран-при")
-gp_choice = st.sidebar.selectbox("Выбери Гран-при", season_data["gp_names"])
+xls_path = excel_files[season_choice]
+season_data = load_season_data(xls_path)
 
-# РЕНДЕР
+# список гонок
+gp_list = season_data["gp_list"]
+race_choice = st.sidebar.selectbox("Выбор Гран-при", gp_list["Название"])
+
+# переводим название → код
+gp_code = gp_list.set_index("Название").loc[race_choice, "Код"]
+
+# вывод
 render_season(
     season_name=season_choice,
-    race_name=gp_choice,
-    data=season_data,
+    race_code=gp_code,
+    data=season_data
 )

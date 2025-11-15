@@ -1,6 +1,9 @@
 import pandas as pd
-import re
+import numpy as np
 
+# ===========================
+# Цвета команд
+# ===========================
 TEAM_COLORS = {
     "Ferrari": "#DC0000",
     "Red Bull": "#1E41FF",
@@ -29,14 +32,47 @@ TEAM_MAP = {
     "VoltEdge Quantum Racing": "VoltEdge",
 }
 
-def normalize_df(df: pd.DataFrame) -> pd.DataFrame:
+# ===========================
+# Нормализация строк/колонок
+# ===========================
+def normalize_df(df: pd.DataFrame):
     df = df.copy()
-    df.columns = [str(c).strip() for c in df.columns]
+    df.columns = [str(c).replace("\xa0", " ").strip() for c in df.columns]
     df = df.applymap(lambda x: str(x).replace("\xa0", " ").strip()
                      if isinstance(x, str) else x)
     return df
 
 
+# ===========================
+# Поиск колонки по ключевым словам
+# ===========================
+def find_column(df, keywords):
+    for col in df.columns:
+        norm = col.lower().replace(" ", "")
+        for key in keywords:
+            if key in norm:
+                return col
+    return None
+
+
+# ===========================
+# Парсинг лучшего круга
+# ===========================
+def parse_lap(val):
+    if not isinstance(val, str):
+        return pd.NaT
+    s = val.lower()
+    if any(bad in s for bad in ["круг", "dnf", "выб"]):
+        return pd.NaT
+    try:
+        return pd.to_timedelta(val)
+    except:
+        return pd.NaT
+
+
+# ===========================
+# Цвет текста под фон
+# ===========================
 def get_text_color(bg):
     if not isinstance(bg, str) or not bg.startswith("#"):
         return "black"
@@ -47,42 +83,82 @@ def get_text_color(bg):
     return "white" if yiq < 150 else "black"
 
 
-def colorize(df: pd.DataFrame):
+# ===========================
+# Окраска таблиц
+# ===========================
+def colorize(df):
+    if df is None or df.empty:
+        return df
+
     df = normalize_df(df)
 
     # ищем колонку команды
-    team_col = None
-    for c in df.columns:
-        if "Команда" in c or "Teams" in c or "Гонки" in c:
-            team_col = c
-            break
+    team_col = find_column(df, ["команда", "team"])
 
     if team_col:
-        df["_team"] = df[team_col].map(TEAM_MAP).fillna(df[team_col])
-        df["_color"] = df["_team"].map(TEAM_COLORS).fillna("#FFFFFF")
+        df["__team__"] = df[team_col].map(TEAM_MAP).fillna(df[team_col])
+        df["__color__"] = df["__team__"].map(TEAM_COLORS).fillna("#FFFFFF")
     else:
-        df["_color"] = "#FFFFFF"
+        df["__color__"] = "#FFFFFF"
 
-    df = df.reset_index(drop=True)
-    row_colors = df["_color"]
+    row_colors = df["__color__"]
+    display_df = df.drop(columns=["__color__", "__team__"], errors="ignore")
 
-    df_disp = df.drop(columns=["_color", "_team"], errors="ignore")
-
-    def row_style(row):
+    def style_row(row):
         bg = row_colors.iloc[row.name]
         fg = get_text_color(bg)
-        return [f"background-color:{bg};color:{fg}" for _ in row]
+        return [f"background-color:{bg}; color:{fg}" for _ in row]
 
-    return df_disp.style.apply(row_style, axis=1)
+    return display_df.style.apply(style_row, axis=1)
 
 
-def parse_lap(val):
-    if not isinstance(val, str):
-        return pd.NaT
-    s = val.lower().strip()
-    if any(x in s for x in ["круг", "выб", "dnf"]):
-        return pd.NaT
-    try:
-        return pd.to_timedelta(val)
-    except:
-        return pd.NaT
+# ===========================
+# Построение маппинга Пилот→Команда
+# ===========================
+def build_pilot_team_map(teams_df):
+    teams_df = normalize_df(teams_df)
+    mapping = {}
+
+    pilot_cols = [c for c in teams_df.columns if "илот" in c.lower()]
+
+    for _, row in teams_df.iterrows():
+        team_name = row["Команда"]
+        for col in pilot_cols:
+            pilot = row[col]
+            if isinstance(pilot, str) and pilot.strip():
+                mapping[pilot.strip()] = team_name
+
+    return mapping
+
+
+# ===========================
+# Чтение Excel сезона
+# ===========================
+def load_season_data(path):
+    xls = pd.ExcelFile(path)
+
+    gp_list = pd.read_excel(xls, "GP_List_" + path[-8:-5])
+    gp_list = normalize_df(gp_list)
+
+    teams = pd.read_excel(xls, "Teams_" + path[-8:-5])
+    wdc = pd.read_excel(xls, "WDC_" + path[-8:-5])
+    wcc = pd.read_excel(xls, "WCC_" + path[-8:-5])
+
+    grand_prix = {}
+    for sheet in xls.sheet_names:
+        if sheet.isupper() and "_" not in sheet:
+            gp = pd.read_excel(xls, sheet, header=None)
+            blocks = {
+                "qualifying": gp.iloc[2:].reset_index(drop=True),
+                "race_drivers": gp.iloc[2:].reset_index(drop=True),
+                "race_teams": None
+            }
+            grand_prix[sheet] = blocks
+
+    return {
+        "teams": teams,
+        "wdc": wdc,
+        "wcc": wcc,
+        "gp_list": gp_list,
+        "grand_prix": grand_prix,
+    }

@@ -1,107 +1,110 @@
 import streamlit as st
 import pandas as pd
-from .utils import colorize, normalize_df, parse_lap
 
-def render_season(season_name, race_name, data):
-    st.title(f"Сезон Формулы-1 {season_name}")
+from .utils import (
+    normalize_df,
+    colorize,
+    find_column,
+    parse_lap,
+    build_pilot_team_map,
+    get_text_color
+)
 
-    # ----------------------------
-    #  НАХОДИМ КОД ГРАН-ПРИ
-    # ----------------------------
-    gp_code = None
-    for code, name in data["gp_code_to_name"].items():
-        if name == race_name:
-            gp_code = code
-            break
 
-    tab_gp, tab_wdc, tab_wcc, tab_teams = st.tabs(
-        ["Гран-при", "WDC", "WCC", "Команды"]
-    )
+def split_gp_blocks(df):
+    df = df.dropna(how="all")
+    headers = df.iloc[0].tolist()
 
-    # ===================================================
-    #                 Г Р А Н - П Р И
-    # ===================================================
+    block_indices = [i for i, x in enumerate(headers) if isinstance(x, str) and x.strip() != ""]
+
+    if len(block_indices) < 3:
+        return None, None, None
+
+    q_start = block_indices[0]
+    r1_start = block_indices[1]
+    r2_start = block_indices[2]
+
+    qualifying = df.iloc[:, q_start:r1_start]
+    race_drivers = df.iloc[:, r1_start:r2_start]
+    race_teams = df.iloc[:, r2_start:]
+
+    qualifying = qualifying.drop(0).reset_index(drop=True)
+    race_drivers = race_drivers.drop(0).reset_index(drop=True)
+    race_teams = race_teams.drop(0).reset_index(drop=True)
+
+    return qualifying, race_drivers, race_teams
+
+
+def render_season(season_name, race_code, data):
+    st.title(f"{race_code} — сезон {season_name}")
+
+    teams = normalize_df(data["teams"])
+    wdc = normalize_df(data["wdc"])
+    wcc = normalize_df(data["wcc"])
+
+    pilot_to_team = build_pilot_team_map(teams)
+
+    gp_df = data["grand_prix"][race_code]["qualifying"]
+    qualifying, race_drivers, race_teams = split_gp_blocks(gp_df)
+
+    tab_gp, tab_wdc, tab_wcc, tab_teams = st.tabs(["Гран-при", "WDC", "WCC", "Команды"])
+
+    # ----------------- Гран-при -----------------
     with tab_gp:
-        st.subheader(f"{race_name} — {season_name}")
+        st.subheader("Квалификация")
+        st.write(colorize(qualifying))
 
-        race_df = data["races"].get(gp_code)
-        if race_df is None:
-            st.warning("Нет данных по этой гонке")
-            return
+        st.subheader("Гонка — пилоты")
 
-        race_df = normalize_df(race_df)
+        race_drivers = normalize_df(race_drivers)
 
-        # ----------------------------
-        #  Блок квалификации
-        # ----------------------------
-        if "Пилоты" in race_df.columns and "Команда" in race_df.columns and "Лучший круг" not in race_df.columns:
-            st.subheader("Квалификация")
-            st.write(colorize(race_df))
-
-        # ----------------------------
-        #  Блок гонки — Пилоты
-        # ----------------------------
-        if "Лучший круг" in race_df.columns:
-            st.subheader("Гонка — пилоты")
-
-            laps = race_df["Лучший круг"].apply(parse_lap)
+        lap_col = find_column(race_drivers, ["лучший", "best", "lap"])
+        if lap_col:
+            laps = race_drivers[lap_col].apply(parse_lap)
             valid = laps.dropna()
 
             if not valid.empty:
                 best = valid.min()
-                mask = laps == best
 
-                def highlight_fastest(col):
-                    if col.name != "Лучший круг":
+                def style_fastest(col):
+                    if col.name != lap_col:
                         return [""] * len(col)
                     return [
-                        "background-color:#8847BD;color:white;font-weight:bold"
-                        if mask.iloc[i] else ""
-                        for i in range(len(col))
+                        "background-color:#8847BD; color:white; font-weight:bold"
+                        if parse_lap(x) == best else ""
+                        for x in col
                     ]
 
-                st.write(race_df.style.apply(highlight_fastest, axis=0))
+                st.write(race_drivers.style.apply(style_fastest, axis=0))
             else:
-                st.write(race_df)
+                st.write(race_drivers)
+        else:
+            st.write(race_drivers)
 
-        # ----------------------------
-        #  Блок гонки — Команды
-        # ----------------------------
-        if "Очки" in race_df.columns and "Команда" in race_df.columns:
-            st.subheader("Гонка — команды")
-            st.write(colorize(race_df))
+        st.subheader("Гонка — команды")
+        st.write(colorize(race_teams))
 
-    # ===================================================
-    #                      W D C
-    # ===================================================
+    # ----------------- WDC -----------------
     with tab_wdc:
         st.subheader(f"WDC {season_name}")
 
-        wdc = normalize_df(data["wdc"]).copy()
-
-        # Правка: очки делаем Int64
+        wdc = wdc.copy()
         num_cols = wdc.select_dtypes(include=["float"]).columns
         wdc[num_cols] = wdc[num_cols].astype("Int64")
 
-        # красим по командам пилотов из Teams
-        teams = normalize_df(data["teams"])
-        pilot_to_team = dict(zip(teams["Пилоты"], teams["Команда"]))
-        wdc["Команда"] = wdc["Пилоты\\Гонки"].map(pilot_to_team)
+        pilot_col = find_column(wdc, ["пилот", "driver"])
+        team_col = "Команда"
 
-        st.write(colorize(wdc.drop(columns=["Команда"])))
+        wdc[team_col] = wdc[pilot_col].map(pilot_to_team)
 
+        st.write(colorize(wdc.drop(columns=[team_col])))
 
-    # ===================================================
-    #                      W C C
-    # ===================================================
+    # ----------------- WCC -----------------
     with tab_wcc:
         st.subheader(f"WCC {season_name}")
-        st.write(colorize(data["wcc"]))
+        st.write(colorize(wcc))
 
-
-    # ===================================================
-    #                  С О С Т А В Ы
-    # ===================================================
+    # ----------------- Команды -----------------
     with tab_teams:
         st.subheader("Составы команд")
-        st.write(colorize(data["teams"]))
+        st.write(colorize(teams))
