@@ -184,37 +184,39 @@ def load_season_data(xls_path: str):
         for _, row in df.iterrows():
             c0 = str(row.iloc[0]).strip().lower()
 
-            # -------------------------
-            # АНГЛИЙСКИЕ БЛОКИ
-            # -------------------------
-            if c0 == "qualification":
+            # пропуск пустых строк
+            if c0 == "" or c0 == "nan":
+                continue
+
+            # ---------- БЛОК QUALIFICATION ----------
+            if c0.startswith("qualification"):
                 if key and temp:
                     sections[key] = pd.DataFrame(temp)
                 key = "qualifying"
                 temp = []
                 continue
 
-            if c0 == "race_pilots":
+            # ---------- БЛОК RACE PILOTS ----------
+            if c0.startswith("race_pilots"):
                 if key and temp:
                     sections[key] = pd.DataFrame(temp)
                 key = "race_drivers"
                 temp = []
                 continue
 
-            if c0 == "race_teams":
+            # ---------- БЛОК RACE TEAMS ----------
+            if c0.startswith("race_teams"):
                 if key and temp:
                     sections[key] = pd.DataFrame(temp)
                 key = "race_teams"
                 temp = []
                 continue
 
-            # -------------------------
-            # ДОБАВЛЯЕМ СТРОКИ В ТЕКУЩИЙ БЛОК
-            # -------------------------
-            if key:
+            # Если мы сейчас внутри блока — добавляем строку
+            if key is not None:
                 temp.append(list(row))
 
-        # последний блок
+        # Закрываем последний блок
         if key and temp:
             sections[key] = pd.DataFrame(temp)
 
