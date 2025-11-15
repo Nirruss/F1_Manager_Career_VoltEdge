@@ -1,46 +1,32 @@
 import pandas as pd
 
-def load_season(season_year: str):
-    file_path = f"F1_Manager_{season_year}.xlsx"
+def load_season(filename: str):
+    xl = pd.ExcelFile(filename)
 
-    try:
-        xls = pd.ExcelFile(file_path)
-    except Exception:
-        return {"error": f"Файл {file_path} не найден."}
+    # список ГП
+    gp_list = xl.parse("GP_List_" + filename[-9:-5])
+    gp_map = dict(zip(gp_list["Код"], gp_list["Название"]))
 
-    # грузим GP List
-    gp_list_sheet = f"GP_List_{season_year}"
-    try:
-        gp_list = xls.parse(gp_list_sheet)
-    except:
-        return {"error": f"Лист {gp_list_sheet} не найден."}
+    # загрузка базовых таблиц
+    year = filename[-9:-5]
+    teams = xl.parse(f"Teams_{year}")
+    wdc = xl.parse(f"WDC_{year}")
+    wcc = xl.parse(f"WCC_{year}")
 
-    gp_list.columns = ["Код", "Название"]
-
-    # ЗАГРУЗКА ЛИСТОВ WDC/WCC/Teams
-    def safe_load(sheet):
-        try:
-            return xls.parse(sheet)
-        except:
-            return None
-
-    wdc = safe_load("WDC")
-    wcc = safe_load("WCC")
-    teams = safe_load("Teams")
-
-    # функция загрузки конкретного ГП
-    def load_gp(code):
-        return {
-            "qualifying": safe_load(f"{code}_Q"),
-            "race_drivers": safe_load(f"{code}_RD"),
-            "race_teams": safe_load(f"{code}_RT")
-        }
+    # загрузка данных по гонкам
+    races = {}
+    for code in gp_map.keys():
+        if code in xl.sheet_names:
+            races[code] = xl.parse(code)
+        else:
+            races[code] = None
 
     return {
-        "xls": xls,
-        "gp_list": gp_list,
+        "teams": teams,
         "wdc": wdc,
         "wcc": wcc,
-        "teams": teams,
-        "load_gp": load_gp,
+        "gp_codes": list(gp_map.keys()),
+        "gp_names": list(gp_map.values()),
+        "gp_code_to_name": gp_map,
+        "races": races,
     }
