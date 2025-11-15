@@ -189,7 +189,7 @@ def load_season_data(xls_path: str):
                 continue
 
             # ---------- QUALIFICATION ----------
-            if c0 == "qualification":
+            if "qualification" in c0:
                 if key and temp:
                     sections[key] = pd.DataFrame(temp)
                 key = "qualifying"
@@ -198,7 +198,7 @@ def load_season_data(xls_path: str):
                 continue
 
             # ---------- RACE PILOTS ----------
-            if c0 == "race_pilots":
+            if "race_pilots" in c0:
                 if key and temp:
                     sections[key] = pd.DataFrame(temp)
                 key = "race_drivers"
@@ -207,7 +207,7 @@ def load_season_data(xls_path: str):
                 continue
 
             # ---------- RACE TEAMS ----------
-            if c0 == "race_teams":
+            if "race_teams" in c0:
                 if key and temp:
                     sections[key] = pd.DataFrame(temp)
                 key = "race_teams"
