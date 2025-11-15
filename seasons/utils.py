@@ -108,16 +108,25 @@ def colorize_table(df: pd.DataFrame):
 
     df = df.copy()
 
-    # Ищем колонку команды
+    # 1) Находим колонку с командой
     team_col = find_column(df, ["команда", "team"])
 
     if team_col:
-        normalized = df[team_col].astype(str).apply(normalize_team_key)
-        mapped = normalized.map(TEAM_MAP).fillna(normalized)
-        df["__color__"] = mapped.map(TEAM_COLORS).fillna("#FFFFFF")
+        # 2) Берём ОРИГИНАЛЬНЫЙ ТЕКСТ
+        original_values = df[team_col].astype(str)
+
+        # 3) Нормализуем ТОЛЬКО КЛЮЧ для поиска цвета
+        normalized = original_values.apply(normalize_team_key)
+
+        # 4) Маппим в ИМЕНА
+        mapped_names = normalized.map(TEAM_MAP).fillna(normalized)
+
+        # 5) ИМЕНА → ЦВЕТА
+        df["__color__"] = mapped_names.map(TEAM_COLORS).fillna("#FFFFFF")
     else:
         df["__color__"] = "#FFFFFF"
 
+    # Убираем вспомогательную колонку
     display_df = df.drop(columns=["__color__"], errors="ignore")
     row_colors = df["__color__"]
 
