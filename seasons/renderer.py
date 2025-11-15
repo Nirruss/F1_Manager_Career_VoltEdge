@@ -9,23 +9,53 @@ from seasons.utils import (
     find_column,
 )
 
-# ===== НОРМАЛИЗАЦИЯ DF =====
+# =====================================================
+#        НОРМАЛИЗАЦИЯ ДАННЫХ + ЧИСТКА ОЧКОВ
+# =====================================================
 def normalize_df(df: pd.DataFrame):
     if df is None or df.empty:
         return df
     df = df.copy()
-    df.columns = [normalize_cols(c).title() for c in df.columns]  # 🔥 заглавные!!!
+    # Заглавные колонки
+    df.columns = [normalize_cols(c).title() for c in df.columns]
+
+    # Чистим строки
     df = df.applymap(lambda x: normalize_cols(x) if isinstance(x, str) else x)
     return df
 
 
+def clean_points_table(df: pd.DataFrame):
+    """Превращает '', 'DNF', 'dnf' → NA, а числа → int."""
+    if df is None or df.empty:
+        return df
+
+    df = df.copy()
+
+    for col in df.columns:
+        if df[col].dtype == object:
+            df[col] = (
+                df[col]
+                .astype(str)
+                .str.strip()
+                .replace({"": pd.NA, "dnf": pd.NA, "DNF": pd.NA})
+            )
+
+            # пробуем сделать числами, но не ломаем строки
+            df[col] = pd.to_numeric(df[col], errors="ignore")
+
+    return df
+
+
+# =====================================================
+#                 ГЛАВНЫЙ РЕНДЕРЕР
+# =====================================================
 def render_season(season_name, race_code, data):
     st.title(f"{race_code} — сезон {season_name}")
 
     # --- БАЗОВЫЕ ТАБЛИЦЫ ---
     teams = normalize_df(data["teams"])
-    wdc   = normalize_df(data["wdc"])
-    wcc   = normalize_df(data["wcc"])
+    wdc   = clean_points_table(normalize_df(data["wdc"]))
+    wcc   = clean_points_table(normalize_df(data["wcc"]))
 
     # карта пилот → команда
     pilot_to_team = build_pilot_team_map(teams)
@@ -36,22 +66,19 @@ def render_season(season_name, race_code, data):
     race_drivers = gp_data.get("race_drivers")
     race_teams   = gp_data.get("race_teams")
 
-    # вкладки
     tab_gp, tab_wdc, tab_wcc, tab_teams = st.tabs(
         ["Гран-при", "WDC", "WCC", "Команды"]
     )
 
-    # ===================================================================
+    # =====================================================
     #                        ГРАН-ПРИ
-    # ===================================================================
+    # =====================================================
     with tab_gp:
         st.subheader("Квалификация")
-        if qualifying is not None:
-            st.write(colorize_table(normalize_df(qualifying)))
-        else:
-            st.warning("Нет данных квалификации")
+        st.write(colorize_table(normalize_df(qualifying))
+                 if qualifying is not None else st.warning("Нет данных"))
 
-        # ===== Гонка — пилоты =====
+        # -------- ГОНКА — ПИЛОТЫ --------
         st.subheader("Гонка — пилоты")
 
         if race_drivers is not None:
@@ -81,52 +108,47 @@ def render_season(season_name, race_code, data):
             else:
                 st.write(race_drivers)
         else:
-            st.warning("Нет данных о пилотах гонки")
+            st.warning("Нет данных")
 
-        # ===== Гонка — команды =====
+        # -------- ГОНКА — КОМАНДЫ --------
         st.subheader("Гонка — команды")
+        st.write(colorize_table(normalize_df(race_teams))
+                 if race_teams is not None else st.warning("Нет данных"))
 
-        if race_teams is not None:
-            st.write(colorize_table(normalize_df(race_teams)))
-        else:
-            st.warning("Нет данных о командах гонки")
-
-    # ===================================================================
+    # =====================================================
     #                        WDC
-    # ===================================================================
+    # =====================================================
     with tab_wdc:
         st.subheader(f"WDC {season_name}")
 
         wdc = wdc.copy()
 
-        # приведение float → int
-        numeric = wdc.select_dtypes(include=["float", "float64"])
-        for col in numeric:
-            wdc[col] = wdc[col].astype("Int64")
+        # приводим числа
+        num_cols = wdc.select_dtypes(include=["float", "int", "Int64"]).columns
+        wdc[num_cols] = wdc[num_cols].astype("Int64")
 
+        # добавляем команду для колорита
         pilot_col = find_column(wdc, ["пилот", "driver"])
         if pilot_col:
             wdc["Команда"] = wdc[pilot_col].map(pilot_to_team)
 
         st.write(colorize_table(wdc))
 
-    # ===================================================================
+    # =====================================================
     #                        WCC
-    # ===================================================================
+    # =====================================================
     with tab_wcc:
         st.subheader(f"WCC {season_name}")
 
-        # приведение очков к int
         wcc = wcc.copy()
-        numeric = wcc.select_dtypes(include=["float"])
-        for col in numeric:
-            wcc[col] = wcc[col].astype("Int64")
+        num_cols = wcc.select_dtypes(include=["float", "int", "Int64"]).columns
+        wcc[num_cols] = wcc[num_cols].astype("Int64")
 
         st.write(colorize_table(wcc))
 
-    # ===================================================================
-    #                        Команды
-    # ===================================================================
+    # =====================================================
+    #                        КОМАНДЫ
+    # =====================================================
     with tab_teams:
         st.subheader("Составы команд")
         st.write(colorize_table(teams))
