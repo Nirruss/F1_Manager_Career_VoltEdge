@@ -15,13 +15,25 @@ from seasons.utils import (
 def normalize_df(df: pd.DataFrame):
     if df is None or df.empty:
         return df
-    df = df.copy()
-    # Заглавные колонки
-    df.columns = [normalize_cols(c).title() for c in df.columns]
 
-    # Чистим строки
+    df = df.copy()
+
+    new_cols = []
+    for i, c in enumerate(df.columns):
+        norm = normalize_cols(c)
+
+        # если колонка пустая / NaN / None → даём имя "Col_i"
+        if norm is None or str(norm).strip() in ["", "nan"]:
+            new_cols.append(f"Col_{i}")
+        else:
+            new_cols.append(str(norm).title())
+
+    df.columns = new_cols
+
+    # нормализация строк
     df = df.applymap(lambda x: normalize_cols(x) if isinstance(x, str) else x)
     return df
+
 
 
 def clean_points_table(df: pd.DataFrame):
