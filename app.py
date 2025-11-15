@@ -37,6 +37,10 @@ race_name = st.sidebar.selectbox(
 # Ищем КОД гонки по имени
 race_code = next(code for code, name in gp_map.items() if name == race_name)
 
+st.subheader("DEBUG GP BLOCKS")
+st.write("Race code:", race_code)
+st.write("Blocks:", season_data["grand_prix"][race_code].keys())
+
 # -------------------------
 # РЕНДЕРИНГ СТРАНИЦЫ
 # -------------------------
