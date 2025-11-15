@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from seasons_pkg.renderer import render_season
+from seasons.renderer import render_season
 from seasons.utils import load_season_data
 
 st.set_page_config(page_title="F1 Manager Dashboard", layout="wide")
