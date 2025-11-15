@@ -2,14 +2,10 @@ import pandas as pd
 import re
 
 
-# ========================================
+# ============================================================
 # НОРМАЛИЗАЦИЯ ТЕКСТА (ТОЛЬКО ДЛЯ ПОИСКА!)
-# ========================================
+# ============================================================
 def normalize_cols(s):
-    """
-    Чистим строку от мусора, но используем ТОЛЬКО
-    для внутренней логики — никогда не выводим.
-    """
     if not isinstance(s, str):
         return ""
     return (
@@ -22,13 +18,10 @@ def normalize_cols(s):
     )
 
 
-# ========================================
+# ============================================================
 # ПОИСК КОЛОНОК
-# ========================================
+# ============================================================
 def find_column(df, keywords):
-    """
-    Ищем колонку по ключевым словам (нормализованным).
-    """
     for col in df.columns:
         key = normalize_cols(col) if isinstance(col, str) else str(col).lower()
         for w in keywords:
@@ -37,9 +30,9 @@ def find_column(df, keywords):
     return None
 
 
-# ========================================
+# ============================================================
 # ЦВЕТА КОМАНД
-# ========================================
+# ============================================================
 TEAM_COLORS = {
     "ferrari": "#DC0000",
     "red bull": "#1E41FF",
@@ -63,15 +56,16 @@ TEAM_MAP = {
     "bwt alpine f1 team": "alpine",
     "visa cash app rb formula one team": "rb",
     "stake f1 team kick sauber": "kick sauber",
+    "stake kick sauber": "kick sauber",
     "moneygram haas f1 team": "haas",
     "williams racing": "williams",
     "voltedge quantum racing": "voltedge",
 }
 
 
-# ========================================
-# ВСПОМОГАТЕЛЬНОЕ: текст на фоне
-# ========================================
+# ============================================================
+# КОНТРАСТ ТЕКСТА
+# ============================================================
 def get_text_color(bg):
     try:
         r = int(bg[1:3], 16)
@@ -84,51 +78,44 @@ def get_text_color(bg):
     return "white" if yiq < 150 else "black"
 
 
-# ========================================
-# НОРМАЛИЗАЦИЯ НАЗВАНИЙ КОМАНД (ДЛЯ ПОИСКА)
-# ========================================
+# ============================================================
+# НОРМАЛИЗАЦИЯ КЛЮЧА ДЛЯ TEAM_MAP (ТОЛЬКО КЛЮЧ!)
+# ============================================================
 def normalize_team_key(name: str):
-    """Чистим и нормализуем ТОЛЬКО для словаря цветов."""
     if not isinstance(name, str):
         return ""
-    base = (
+    return (
         name.replace("\xa0", " ")
             .replace("\u200b", "")
             .strip()
+            .lower()
     )
-    return base.lower()
 
 
-# ========================================
-# ОКРАШИВАНИЕ ТАБЛИЦ
-# ========================================
+# ============================================================
+# COLORIZE TABLE (ОКРАШИВАНИЕ)
+# ============================================================
 def colorize_table(df: pd.DataFrame):
     if df is None or df.empty:
         return df
 
     df = df.copy()
 
-    # 1) Находим колонку с командой
     team_col = find_column(df, ["команда", "team"])
-
     if team_col:
-        # 2) Берём ОРИГИНАЛЬНЫЙ ТЕКСТ
         original_values = df[team_col].astype(str)
 
-        # 3) Нормализуем ТОЛЬКО КЛЮЧ для поиска цвета
+        # нормализуем ТОЛЬКО для поиска
         normalized = original_values.apply(normalize_team_key)
 
-        # 4) Маппим в ИМЕНА
-        mapped_names = normalized.map(TEAM_MAP).fillna(normalized)
+        mapped_name = normalized.map(TEAM_MAP).fillna(normalized)
 
-        # 5) ИМЕНА → ЦВЕТА
-        df["__color__"] = mapped_names.map(TEAM_COLORS).fillna("#FFFFFF")
+        df["__color__"] = mapped_name.map(TEAM_COLORS).fillna("#FFFFFF")
     else:
         df["__color__"] = "#FFFFFF"
 
-    # Убираем вспомогательную колонку
-    display_df = df.drop(columns=["__color__"], errors="ignore")
     row_colors = df["__color__"]
+    display_df = df.drop(columns=["__color__"], errors="ignore")
 
     def style_row(row):
         bg = row_colors.iloc[row.name]
@@ -138,14 +125,14 @@ def colorize_table(df: pd.DataFrame):
     return display_df.style.apply(style_row, axis=1).hide(axis="index")
 
 
-# ========================================
-# ВРЕМЕНА КРУГОВ
-# ========================================
+# ============================================================
+# ПАРСИНГ ВРЕМЕНИ КРУГА
+# ============================================================
 def parse_lap_time(val):
     if not isinstance(val, str):
         return pd.NaT
     s = normalize_cols(val)
-    if any(w in s for w in ["dnf", "выб", "lap", "круг"]):
+    if any(w in s for w in ["dnf", "выб", "круг", "lap"]):
         return pd.NaT
     try:
         return pd.to_timedelta(val)
@@ -153,11 +140,10 @@ def parse_lap_time(val):
         return pd.NaT
 
 
-# ========================================
+# ============================================================
 # ПИЛОТ → КОМАНДА
-# ========================================
+# ============================================================
 def build_pilot_team_map(teams_df: pd.DataFrame):
-    """Создаёт карту 'Пилот → Команда (нормализованная)'."""
     if teams_df is None or teams_df.empty:
         return {}
 
@@ -174,16 +160,16 @@ def build_pilot_team_map(teams_df: pd.DataFrame):
     for _, row in df.iterrows():
         pilot = str(row[pilot_col]).strip()
         team_raw = str(row[team_col]).strip()
-        team_key = normalize_team_key(team_raw)
-        team = TEAM_MAP.get(team_key, team_raw)
-        mapping[pilot] = team
+        key = normalize_team_key(team_raw)
+        mapped = TEAM_MAP.get(key, team_raw)
+        mapping[pilot] = mapped
 
     return mapping
 
 
-# ========================================
+# ============================================================
 # ПАРСЕР СЕЗОНА
-# ========================================
+# ============================================================
 def load_season_data(xls_path: str):
 
     xls = pd.ExcelFile(xls_path)
@@ -216,6 +202,7 @@ def load_season_data(xls_path: str):
         skip_header = False
 
         for _, row in df.iterrows():
+
             row_text = " ".join(
                 normalize_cols(str(x))
                 for x in row.values
@@ -225,7 +212,6 @@ def load_season_data(xls_path: str):
             if not row_text:
                 continue
 
-            # Блок QUALI
             if any(x in row_text for x in ["qualificat", "qualification", "qualify", "квалиф"]):
                 if key and temp:
                     sections[key] = pd.DataFrame(temp)
