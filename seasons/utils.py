@@ -182,32 +182,39 @@ def load_season_data(xls_path: str):
         temp = []
 
         for _, row in df.iterrows():
-            c0 = str(row.iloc[0]).lower().strip()
+            c0 = str(row.iloc[0]).strip().lower()
 
-            if "квалификация" in c0:
+            # -------------------------
+            # АНГЛИЙСКИЕ БЛОКИ
+            # -------------------------
+            if c0 == "qualification":
                 if key and temp:
                     sections[key] = pd.DataFrame(temp)
                 key = "qualifying"
                 temp = []
                 continue
 
-            if "гонка" in c0 and "пилот" in c0:
+            if c0 == "race_pilots":
                 if key and temp:
                     sections[key] = pd.DataFrame(temp)
                 key = "race_drivers"
                 temp = []
                 continue
 
-            if "гонка" in c0 and "команд" in c0:
+            if c0 == "race_teams":
                 if key and temp:
                     sections[key] = pd.DataFrame(temp)
                 key = "race_teams"
                 temp = []
                 continue
 
+            # -------------------------
+            # ДОБАВЛЯЕМ СТРОКИ В ТЕКУЩИЙ БЛОК
+            # -------------------------
             if key:
                 temp.append(list(row))
 
+        # последний блок
         if key and temp:
             sections[key] = pd.DataFrame(temp)
 
