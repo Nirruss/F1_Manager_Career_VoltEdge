@@ -15,8 +15,7 @@ def normalize_match(s):
          .replace("\n", " ")
          .strip()
     )
-    s = re.sub(r"\s+", " ", s)
-    return s.lower()
+    return re.sub(r"\s+", " ", s).lower()
 
 
 # =========================
@@ -49,23 +48,20 @@ TEAM_COLORS = {
 }
 
 TEAM_MAP = {
-    "scuderia ferrari hp": "ferrari",
     "oracle red bull racing": "red bull",
     "mercedes-amg petronas formula one team": "mercedes",
+    "scuderia ferrari hp": "ferrari",
     "mclaren formula 1 team": "mclaren",
     "aston martin aramco formula one team": "aston martin",
-    "bwt alpine f1 team": "alpine",
     "visa cash app rb formula one team": "rb",
     "stake f1 team kick sauber": "kick sauber",
     "moneygram haas f1 team": "haas",
     "williams racing": "williams",
+    "bwt alpine f1 team": "alpine",
     "voltedge quantum racing": "voltedge",
 }
 
 
-# =========================
-# ПРОВЕРКА КОНТРАСТА
-# =========================
 def get_text_color(bg):
     try:
         r = int(bg[1:3], 16)
@@ -74,7 +70,7 @@ def get_text_color(bg):
     except:
         return "black"
 
-    yiq = (r*299 + g*587 + b*114) / 1000
+    yiq = (r*299 + g*587 + b*114)/1000
     return "white" if yiq < 150 else "black"
 
 
@@ -87,8 +83,8 @@ def colorize_table(df: pd.DataFrame):
     team_col = find_column(df, ["команда", "team"])
 
     if team_col:
-        norm = df[team_col].astype(str).apply(normalize_match)
-        mapped = norm.map(TEAM_MAP).fillna(norm)
+        normalized = df[team_col].astype(str).apply(normalize_match)
+        mapped = normalized.map(TEAM_MAP).fillna(normalized)
         df["__color__"] = mapped.map(TEAM_COLORS).fillna("#FFFFFF")
     else:
         df["__color__"] = "#FFFFFF"
@@ -108,7 +104,7 @@ def colorize_table(df: pd.DataFrame):
 # ПИЛОТ → КОМАНДА
 # =========================
 def build_pilot_team_map(teams_df):
-    pilot_col = find_column(teams_df, ["пилот", "driver"])
+    pilot_col = find_column(teams_df, ["pilot", "пилот"])
     team_col  = find_column(teams_df, ["команда", "team"])
 
     mapping = {}
@@ -121,13 +117,13 @@ def build_pilot_team_map(teams_df):
 
 
 # =========================
-# ПАРСЕР ЛУЧШЕГО КРУГА
+# ЛУЧШИЙ КРУГ
 # =========================
 def parse_lap_time(v):
     if not isinstance(v, str):
         return pd.NaT
     s = normalize_match(v)
-    if any(x in s for x in ["dnf", "выб", "lap"]):
+    if any(x in s for x in ["dnf", "lap", "выб"]):
         return pd.NaT
     try:
         return pd.to_timedelta(v)
@@ -136,33 +132,85 @@ def parse_lap_time(v):
 
 
 # =========================
-# ГЛАВНАЯ ФУНКЦИЯ ЗАГРУЗКИ СЕЗОНА
+# ПОЛНЫЙ ПАРСЕР СЕЗОНА
 # =========================
 def load_season_data(xls_path):
     xls = pd.ExcelFile(xls_path)
     season_year = xls_path.split("_")[-1].split(".")[0]
 
-    # -------- ЧТЕНИЕ GP_LIST --------
+    # ---------- ЧТЕНИЕ GP LIST ----------
     gp_df = pd.read_excel(xls, f"GP_List_{season_year}")
 
-    # Чем бы ни назвались колонки → ищем по смыслу
     code_col = find_column(gp_df, ["код", "code"])
     name_col = find_column(gp_df, ["назв", "name"])
 
     gp_list = dict(zip(
         gp_df[code_col].astype(str).str.strip(),
-        gp_df[name_col].astype(str).str.strip(),
+        gp_df[name_col].astype(str).str.strip()
     ))
 
-    # -------- Остальные листы --------
+    # ---------- WDC / WCC / TEAMS ----------
     wdc = pd.read_excel(xls, f"WDC_{season_year}")
     wcc = pd.read_excel(xls, f"WCC_{season_year}")
     teams = pd.read_excel(xls, f"Teams_{season_year}")
 
-    # -------- Парсер гонок оставляем как у тебя --------
+    # ---------- ПАРСЕР ГРАН-ПРИ ----------
     grand_prix = {}
+
     for code in gp_list:
-        grand_prix[code] = {}
+        if code not in xls.sheet_names:
+            grand_prix[code] = {}
+            continue
+
+        df = pd.read_excel(xls, code, header=None)
+        sections = {}
+        key = None
+        temp = []
+        skip_header = False
+
+        for _, row in df.iterrows():
+            row_text = " ".join(
+                normalize_match(str(x)) for x in row.values if pd.notna(x)
+            )
+
+            if row_text == "":
+                continue
+
+            if any(x in row_text for x in ["qualificat", "qualification", "qualify", "квалиф"]):
+                if key and temp:
+                    sections[key] = pd.DataFrame(temp)
+                key = "qualifying"
+                temp = []
+                skip_header = True
+                continue
+
+            if "race_drivers" in row_text:
+                if key and temp:
+                    sections[key] = pd.DataFrame(temp)
+                key = "race_drivers"
+                temp = []
+                skip_header = True
+                continue
+
+            if "race_teams" in row_text:
+                if key and temp:
+                    sections[key] = pd.DataFrame(temp)
+                key = "race_teams"
+                temp = []
+                skip_header = True
+                continue
+
+            if skip_header:
+                skip_header = False
+                continue
+
+            if key:
+                temp.append(list(row))
+
+        if key and temp:
+            sections[key] = pd.DataFrame(temp)
+
+        grand_prix[code] = sections
 
     return {
         "gp_map": gp_list,
