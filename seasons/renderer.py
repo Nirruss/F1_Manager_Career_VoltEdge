@@ -9,12 +9,12 @@ from seasons.utils import (
     find_column,
 )
 
-# универсальный нормализатор DataFrame
+# ===== НОРМАЛИЗАЦИЯ DF =====
 def normalize_df(df: pd.DataFrame):
     if df is None or df.empty:
         return df
     df = df.copy()
-    df.columns = [normalize_cols(c) for c in df.columns]
+    df.columns = [normalize_cols(c).title() for c in df.columns]  # 🔥 заглавные!!!
     df = df.applymap(lambda x: normalize_cols(x) if isinstance(x, str) else x)
     return df
 
@@ -22,34 +22,36 @@ def normalize_df(df: pd.DataFrame):
 def render_season(season_name, race_code, data):
     st.title(f"{race_code} — сезон {season_name}")
 
-    # базовые таблицы
+    # --- БАЗОВЫЕ ТАБЛИЦЫ ---
     teams = normalize_df(data["teams"])
-    wdc = normalize_df(data["wdc"])
-    wcc = normalize_df(data["wcc"])
+    wdc   = normalize_df(data["wdc"])
+    wcc   = normalize_df(data["wcc"])
 
     # карта пилот → команда
     pilot_to_team = build_pilot_team_map(teams)
 
-    # получаем блоки ГП
+    # --- ГРАН-ПРИ ---
     gp_data = data["grand_prix"].get(race_code, {})
-
-    qualifying = gp_data.get("qualifying")
+    qualifying   = gp_data.get("qualifying")
     race_drivers = gp_data.get("race_drivers")
-    race_teams = gp_data.get("race_teams")
+    race_teams   = gp_data.get("race_teams")
 
     # вкладки
-    tab_gp, tab_wdc, tab_wcc, tab_teams = st.tabs(["Гран-при", "WDC", "WCC", "Команды"])
+    tab_gp, tab_wdc, tab_wcc, tab_teams = st.tabs(
+        ["Гран-при", "WDC", "WCC", "Команды"]
+    )
 
-    # ----------------- Гран-при -----------------
+    # ===================================================================
+    #                        ГРАН-ПРИ
+    # ===================================================================
     with tab_gp:
         st.subheader("Квалификация")
-
         if qualifying is not None:
             st.write(colorize_table(normalize_df(qualifying)))
         else:
             st.warning("Нет данных квалификации")
 
-        # ======== ГОНКА — ПИЛОТЫ ========
+        # ===== Гонка — пилоты =====
         st.subheader("Гонка — пилоты")
 
         if race_drivers is not None:
@@ -81,7 +83,7 @@ def render_season(season_name, race_code, data):
         else:
             st.warning("Нет данных о пилотах гонки")
 
-        # ======== ГОНКА — КОМАНДЫ ========
+        # ===== Гонка — команды =====
         st.subheader("Гонка — команды")
 
         if race_teams is not None:
@@ -89,25 +91,42 @@ def render_season(season_name, race_code, data):
         else:
             st.warning("Нет данных о командах гонки")
 
-    # ----------------- WDC -----------------
+    # ===================================================================
+    #                        WDC
+    # ===================================================================
     with tab_wdc:
         st.subheader(f"WDC {season_name}")
 
         wdc = wdc.copy()
-        num_cols = wdc.select_dtypes(include=["float"]).columns
-        wdc[num_cols] = wdc[num_cols].astype("Int64")
+
+        # приведение float → int
+        numeric = wdc.select_dtypes(include=["float", "float64"])
+        for col in numeric:
+            wdc[col] = wdc[col].astype("Int64")
 
         pilot_col = find_column(wdc, ["пилот", "driver"])
-        wdc["команда_цвет"] = wdc[pilot_col].map(pilot_to_team)
+        if pilot_col:
+            wdc["Команда"] = wdc[pilot_col].map(pilot_to_team)
 
-        st.write(colorize_table(wdc.drop(columns=["команда_цвет"], errors="ignore")))
+        st.write(colorize_table(wdc))
 
-    # ----------------- WCC -----------------
+    # ===================================================================
+    #                        WCC
+    # ===================================================================
     with tab_wcc:
         st.subheader(f"WCC {season_name}")
+
+        # приведение очков к int
+        wcc = wcc.copy()
+        numeric = wcc.select_dtypes(include=["float"])
+        for col in numeric:
+            wcc[col] = wcc[col].astype("Int64")
+
         st.write(colorize_table(wcc))
 
-    # ----------------- Команды -----------------
+    # ===================================================================
+    #                        Команды
+    # ===================================================================
     with tab_teams:
         st.subheader("Составы команд")
         st.write(colorize_table(teams))
