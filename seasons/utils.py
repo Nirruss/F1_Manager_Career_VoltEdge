@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-import regex as re
+import re
 
 def normalize_cols(s):
     if not isinstance(s, str):
