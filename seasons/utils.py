@@ -1,93 +1,235 @@
 import pandas as pd
+import numpy as np
+import re
 
+# ========================================
+# НОРМАЛИЗАЦИЯ ТЕКСТА
+# ========================================
+def normalize_cols(s):
+    if not isinstance(s, str):
+        return s
+    return (
+        s.replace("\xa0", " ")
+         .replace("\n", " ")
+         .strip()
+         .lower()
+    )
+
+
+def find_column(df, keywords):
+    """
+    Ищет колонку по ключевым словам:
+    keywords = ["команда", "team"]
+    """
+    norm = {col: normalize_cols(col) for col in df.columns}
+
+    for col, n in norm.items():
+        for key in keywords:
+            if key in n:
+                return col
+    return None
+
+
+# ========================================
+# ЦВЕТА КОМАНД
+# ========================================
+TEAM_COLORS = {
+    "ferrari": "#DC0000",
+    "red bull": "#1E41FF",
+    "mercedes": "#00D2BE",
+    "mclaren": "#FF8700",
+    "aston martin": "#006F62",
+    "rb": "#B9DCFF",
+    "haas": "#B6BABD",
+    "williams": "#018CFF",
+    "kick sauber": "#52E252",
+    "alpine": "#0090FF",
+    "voltedge": "#F4EA00",
+}
+
+TEAM_MAP = {
+    "oracle red bull racing": "red bull",
+    "mercedes-amg petronas formula one team": "mercedes",
+    "scuderia ferrari hp": "ferrari",
+    "mclaren formula 1 team": "mclaren",
+    "aston martin aramco formula one team": "aston martin",
+    "bwt alpine f1 team": "alpine",
+    "visa cash app rb formula one team": "rb",
+    "stake f1 team kick sauber": "kick sauber",
+    "moneygram haas f1 team": "haas",
+    "williams racing": "williams",
+    "voltedge quantum racing": "voltedge",
+}
+
+# =====================================================
+# ЦВЕТ ТЕКСТА ДЛЯ КОНТРАСТА
+# =====================================================
+def get_text_color(bg):
+    if not isinstance(bg, str) or not bg.startswith("#"):
+        return "black"
+    try:
+        r = int(bg[1:3], 16)
+        g = int(bg[3:5], 16)
+        b = int(bg[5:7], 16)
+    except:
+        return "black"
+    yiq = (r * 299 + g * 587 + b * 114) / 1000
+    return "white" if yiq < 150 else "black"
+
+
+# =====================================================
+# ОКРАСКА ТАБЛИЦ
+# =====================================================
+def colorize_table(df: pd.DataFrame):
+    if df is None or df.empty:
+        return df
+
+    df = df.copy()
+
+    # нормализация значений
+    df = df.applymap(lambda x: str(x).replace("\xa0", " ").strip()
+                     if isinstance(x, str) else x)
+
+    # ищем колонку команды
+    team_col = find_column(df, ["команда", "team"])
+
+    if team_col:
+        normalized = df[team_col].apply(lambda x: normalize_cols(str(x)))
+        mapped = normalized.map(TEAM_MAP).fillna(normalized)
+        df["__color__"] = mapped.map(TEAM_COLORS).fillna("#FFFFFF")
+    else:
+        df["__color__"] = "#FFFFFF"
+
+    df = df.reset_index(drop=True)
+    row_colors = df["__color__"]
+
+    display_df = df.drop(columns=["__color__"], errors="ignore")
+
+    def row_style(row):
+        bg = row_colors.iloc[row.name]
+        fg = get_text_color(bg)
+        return [f"background-color:{bg}; color:{fg}" for _ in row]
+
+    return display_df.style.apply(row_style, axis=1).hide(axis="index")
+
+
+# =====================================================
+# РАЗБОР ЛУЧШЕГО КРУГА
+# =====================================================
+def parse_lap_time(val):
+    if not isinstance(val, str):
+        return pd.NaT
+
+    s = normalize_cols(val)
+    if any(x in s for x in ["круг", "lap", "dnf", "выб"]):
+        return pd.NaT
+
+    try:
+        return pd.to_timedelta(val)
+    except:
+        return pd.NaT
+
+
+# =====================================================
+# ДЛЯ WDC — КАРТА ПИЛОТ → КОМАНДА
+# =====================================================
+def build_pilot_team_map(teams_df: pd.DataFrame):
+    """
+    Берём таблицу Состав команд и строим структуру:
+    pilot → team
+    """
+    if teams_df is None or teams_df.empty:
+        return {}
+
+    teams_df = teams_df.copy()
+    pilot_col = find_column(teams_df, ["пилот", "driver"])
+    team_col = find_column(teams_df, ["команда"])
+
+    if not pilot_col or not team_col:
+        return {}
+
+    mapping = {}
+
+    for _, row in teams_df.iterrows():
+        pilot = str(row[pilot_col]).strip()
+        team_raw = normalize_cols(str(row[team_col]).strip())
+        team = TEAM_MAP.get(team_raw, team_raw)
+        mapping[pilot] = team
+
+    return mapping
+
+
+# =====================================================
+# ЗАГРУЗКА SEASON DATA
+# =====================================================
 def load_season_data(xls_path: str):
-    """
-    Загружает:
-    - лист GP_List_XXXX
-    - WDC_XXXX
-    - WCC_XXXX
-    - Teams_XXXX
-    - ВСЕ гонки по их кодам (BAH, SAU, AUS…)
-    """
 
     xls = pd.ExcelFile(xls_path)
 
-    # ------ 1. Определяем сезон ------
-
-    # путь заканчивается на F1_Manager_2024.xlsx → берём "2024"
     season_year = xls_path.split("_")[-1].split(".")[0]
     gp_sheet = f"GP_List_{season_year}"
 
-    gp_list_df = pd.read_excel(xls, gp_sheet)
+    gp_df = pd.read_excel(xls, gp_sheet)
+    gp_df.columns = ["code", "name"]
 
-    # нормализуем имена
-    gp_list_df.columns = ["code", "name"]
-    gp_list_df["code"] = gp_list_df["code"].astype(str).str.strip()
-    gp_list_df["name"] = gp_list_df["name"].astype(str).strip()
-
-    # создаём mapping: CODE → NAME
-    gp_map = dict(zip(gp_list_df["code"], gp_list_df["name"]))
-
-    # ------ 2. Загружаем командные листы ------
+    gp_map = dict(zip(
+        gp_df["code"].astype(str).str.strip(),
+        gp_df["name"].astype(str).str.strip()
+    ))
 
     wdc = pd.read_excel(xls, f"WDC_{season_year}")
     wcc = pd.read_excel(xls, f"WCC_{season_year}")
     teams = pd.read_excel(xls, f"Teams_{season_year}")
 
-    # ------ 3. Загружаем ВСЕ гонки по кодам ------
-
+    # грузим гонки
     grand_prix = {}
 
-    for code in gp_map.keys():
+    for code in gp_map:
         if code not in xls.sheet_names:
-            print(f"[WARNING] Лист гонки '{code}' отсутствует в Excel.")
             continue
 
         df = pd.read_excel(xls, code)
 
-        # делим на секции
-        # Квалификация / Гонка — пилоты / Гонка — команды
         sections = {}
-        current_key = None
+        key = None
         temp = []
 
         for _, row in df.iterrows():
-            cell = str(row.iloc[0]).strip().lower()
+            c0 = str(row.iloc[0]).lower().strip()
 
-            if "квалификация" in cell:
-                if current_key and temp:
-                    sections[current_key] = pd.DataFrame(temp).dropna(how="all")
-                    temp = []
-                current_key = "qualifying"
+            if "квалификация" in c0:
+                if key and temp:
+                    sections[key] = pd.DataFrame(temp)
+                key = "qualifying"
+                temp = []
+                continue
 
-            elif "гонка" in cell and "пилот" in cell:
-                if current_key and temp:
-                    sections[current_key] = pd.DataFrame(temp).dropna(how="all")
-                    temp = []
-                current_key = "race_drivers"
+            if "гонка" in c0 and "пилот" in c0:
+                if key and temp:
+                    sections[key] = pd.DataFrame(temp)
+                key = "race_drivers"
+                temp = []
+                continue
 
-            elif "гонка" in cell and "команд" in cell:
-                if current_key and temp:
-                    sections[current_key] = pd.DataFrame(temp).dropna(how="all")
-                    temp = []
-                current_key = "race_teams"
+            if "гонка" in c0 and "команд" in c0:
+                if key and temp:
+                    sections[key] = pd.DataFrame(temp)
+                key = "race_teams"
+                temp = []
+                continue
 
-            else:
-                if current_key:
-                    temp.append(list(row))
+            if key:
+                temp.append(list(row))
 
-        if current_key and temp:
-            sections[current_key] = pd.DataFrame(temp).dropna(how="all")
+        if key and temp:
+            sections[key] = pd.DataFrame(temp)
 
-        # добавляем гонку в словарь
         grand_prix[code] = sections
 
-    # ------ 4. Возвращаем структуру данных сезона ------
-
     return {
-        "gp_map": gp_map,          # CODE → Name
-        "grand_prix": grand_prix,  # данные гонок
+        "gp_map": gp_map,
         "wdc": wdc,
         "wcc": wcc,
         "teams": teams,
+        "grand_prix": grand_prix,
     }
