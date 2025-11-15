@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 
-from .utils import (
+from seasons_pkg.utils import (
     load_season_data,
     colorize_table,
     parse_lap_time,
