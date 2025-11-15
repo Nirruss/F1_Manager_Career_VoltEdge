@@ -214,9 +214,11 @@ def load_season_data(xls_path: str):
         grand_prix[code] = sections
 
     return {
+        "gp_map": gp_list,
         "gp_list": gp_list,
         "grand_prix": grand_prix,
         "wdc": wdc,
         "wcc": wcc,
         "teams": teams,
     }
+
