@@ -10,6 +10,8 @@ def normalize_cols(s):
         return s
     return (
         s.replace("\xa0", " ")
+         .replace("\u200b", "")     # невидимый zero-width space
+         .replace("\r", " ")
          .replace("\n", " ")
          .strip()
          .lower()
@@ -143,7 +145,7 @@ def build_pilot_team_map(teams_df: pd.DataFrame):
 
 
 # ========================================
-# ГЛАВНЫЙ ПАРСЕР СЕЗОНА — АДАПТИРОВАН ПОД ТВОЙ EXCEL
+# ПАРСЕР ГРАН-ПРИ (УЛЬТРАНАДЁЖНЫЙ)
 # ========================================
 def load_season_data(xls_path: str):
 
@@ -180,16 +182,19 @@ def load_season_data(xls_path: str):
         sections = {}
         key = None
         temp = []
+        skip_header = False
 
         for _, row in df.iterrows():
-            c0 = str(row.iloc[0]).strip().lower()
+            # Берём ВСЮ строку, а не только первый столбец
+            row_text = " ".join(
+                normalize_cols(str(x)) for x in row.values if pd.notna(x)
+            ).strip()
 
-            # пустые строки — пропускаем
-            if c0 == "" or c0 == "nan":
+            if row_text == "" or row_text == "nan":
                 continue
 
-            # ---------- QUALIFICATION ----------
-            if "qualification" in c0:
+            # -------- Блок QUALIFICATION --------
+            if "qualification" in row_text:
                 if key and temp:
                     sections[key] = pd.DataFrame(temp)
                 key = "qualifying"
@@ -197,8 +202,8 @@ def load_season_data(xls_path: str):
                 skip_header = True
                 continue
 
-            # ---------- RACE PILOTS ----------
-            if "race_pilots" in c0:
+            # -------- Блок RACE DRIVERS --------
+            if "race_pilots" in row_text or "race drivers" in row_text:
                 if key and temp:
                     sections[key] = pd.DataFrame(temp)
                 key = "race_drivers"
@@ -206,8 +211,8 @@ def load_season_data(xls_path: str):
                 skip_header = True
                 continue
 
-            # ---------- RACE TEAMS ----------
-            if "race_teams" in c0:
+            # -------- Блок RACE TEAMS --------
+            if "race_teams" in row_text or "race teams" in row_text:
                 if key and temp:
                     sections[key] = pd.DataFrame(temp)
                 key = "race_teams"
@@ -215,16 +220,16 @@ def load_season_data(xls_path: str):
                 skip_header = True
                 continue
 
-            # Пропускаем строку-шапку после объявления блока
-            if 'skip_header' in locals() and skip_header:
+            # Пропускаем шапку сразу после блока
+            if skip_header:
                 skip_header = False
                 continue
 
-            # Внутри блока — копим строки
+            # Добавляем данные блока
             if key is not None:
                 temp.append(list(row))
 
-        # закрываем последний блок
+        # Закрываем последний блок
         if key and temp:
             sections[key] = pd.DataFrame(temp)
 
