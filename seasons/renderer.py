@@ -2,13 +2,12 @@ import streamlit as st
 import pandas as pd
 
 from .utils import (
-    normalize_df,
-    colorize,
-    find_column,
-    parse_lap,
-    build_pilot_team_map,
-    get_text_color
+    load_season_data,
+    colorize_table,
+    parse_lap_time,
+    normalize_cols
 )
+
 
 
 def split_gp_blocks(df):
