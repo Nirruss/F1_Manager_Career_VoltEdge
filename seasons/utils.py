@@ -1,58 +1,40 @@
 import pandas as pd
-import numpy as np
 import re
 
-def normalize_cols(s):
-    if not isinstance(s, str):
-        return s
 
-    # убираем неразрывные пробелы, zero-width и прочий мусор
-    s = (
+# ========================================
+# НОРМАЛИЗАЦИЯ ТЕКСТА (ТОЛЬКО ДЛЯ ПОИСКА!)
+# ========================================
+def normalize_cols(s):
+    """
+    Чистим строку от мусора, но используем ТОЛЬКО
+    для внутренней логики — никогда не выводим.
+    """
+    if not isinstance(s, str):
+        return ""
+    return (
         s.replace("\xa0", " ")
          .replace("\u200b", "")
          .replace("\r", " ")
          .replace("\n", " ")
+         .strip()
+         .lower()
     )
 
-    # убираем все двойные пробелы
-    while "  " in s:
-        s = s.replace("  ", " ")
 
-    return s.strip().lower()
-
-
-def normalize_team_name(s: str):
-    s = normalize_cols(s)
-    # чтобы было прям безопасно — убираем двойные пробелы
-    s = re.sub(r"\s+", " ", s)
-    return s
-
-
+# ========================================
+# ПОИСК КОЛОНОК
+# ========================================
 def find_column(df, keywords):
     """
-    Ищет колонку по ключевым словам в НАЗВАНИЯХ столбцов.
-    Возвращает оригинальное имя столбца или None.
+    Ищем колонку по ключевым словам (нормализованным).
     """
-    norm = {}
-
-    # нормализуем названия колонок в строку
     for col in df.columns:
-        if isinstance(col, str):
-            n = normalize_cols(col)
-        else:
-            # на всякий случай: числа, None и т.п.
-            n = str(col).strip().lower()
-        norm[col] = n
-
-    for col, n in norm.items():
-        if not isinstance(n, str):
-            continue
-        for key in keywords:
-            if key in n:
+        key = normalize_cols(col) if isinstance(col, str) else str(col).lower()
+        for w in keywords:
+            if w in key:
                 return col
-
     return None
-
 
 
 # ========================================
@@ -88,7 +70,7 @@ TEAM_MAP = {
 
 
 # ========================================
-# КОНТРАСТНЫЙ ТЕКСТ
+# ВСПОМОГАТЕЛЬНОЕ: текст на фоне
 # ========================================
 def get_text_color(bg):
     try:
@@ -97,82 +79,96 @@ def get_text_color(bg):
         b = int(bg[5:7], 16)
     except Exception:
         return "black"
+
     yiq = (r * 299 + g * 587 + b * 114) / 1000
     return "white" if yiq < 150 else "black"
 
 
 # ========================================
-# ОКРАСКА ТАБЛИЦ
+# НОРМАЛИЗАЦИЯ НАЗВАНИЙ КОМАНД (ДЛЯ ПОИСКА)
+# ========================================
+def normalize_team_key(name: str):
+    """Чистим и нормализуем ТОЛЬКО для словаря цветов."""
+    if not isinstance(name, str):
+        return ""
+    base = (
+        name.replace("\xa0", " ")
+            .replace("\u200b", "")
+            .strip()
+    )
+    return base.lower()
+
+
+# ========================================
+# ОКРАШИВАНИЕ ТАБЛИЦ
 # ========================================
 def colorize_table(df: pd.DataFrame):
     if df is None or df.empty:
         return df
 
     df = df.copy()
-    df = df.applymap(lambda x: str(x).replace("\xa0", " ").strip()
-                     if isinstance(x, str) else x)
 
-    team_col = find_column(df, ["команда", "team", "команды"])
+    # Ищем колонку команды
+    team_col = find_column(df, ["команда", "team"])
 
     if team_col:
-        # нормализуем ТОЛЬКО значение, НЕ заголовок
-        normalized = df[team_col].astype(str).apply(normalize_cols)
-
-        mapped = df[team_col].astype(str).apply(normalize_team_name).map(TEAM_MAP)
-
-
+        normalized = df[team_col].astype(str).apply(normalize_team_key)
+        mapped = normalized.map(TEAM_MAP).fillna(normalized)
         df["__color__"] = mapped.map(TEAM_COLORS).fillna("#FFFFFF")
     else:
         df["__color__"] = "#FFFFFF"
 
-    df = df.reset_index(drop=True)
+    display_df = df.drop(columns=["__color__"], errors="ignore")
     row_colors = df["__color__"]
 
-    display_df = df.drop(columns=["__color__"], errors="ignore")
-
-    def row_style(row):
+    def style_row(row):
         bg = row_colors.iloc[row.name]
         fg = get_text_color(bg)
         return [f"background-color:{bg}; color:{fg}" for _ in row]
 
-    return display_df.style.apply(row_style, axis=1).hide(axis="index")
+    return display_df.style.apply(style_row, axis=1).hide(axis="index")
 
 
 # ========================================
-# РАЗБОР ЛУЧШЕГО КРУГА
+# ВРЕМЕНА КРУГОВ
 # ========================================
 def parse_lap_time(val):
     if not isinstance(val, str):
         return pd.NaT
     s = normalize_cols(val)
-    if any(x in s for x in ["круг", "lap", "dnf", "выб"]):
+    if any(w in s for w in ["dnf", "выб", "lap", "круг"]):
         return pd.NaT
     try:
         return pd.to_timedelta(val)
-    except Exception:
+    except:
         return pd.NaT
 
 
 # ========================================
-# КАРТА ПИЛОТ → КОМАНДА
+# ПИЛОТ → КОМАНДА
 # ========================================
 def build_pilot_team_map(teams_df: pd.DataFrame):
+    """Создаёт карту 'Пилот → Команда (нормализованная)'."""
     if teams_df is None or teams_df.empty:
         return {}
 
-    teams_df = teams_df.copy()
-    pilot_col = find_column(teams_df, ["пилот", "driver"])
-    team_col = find_column(teams_df, ["команда"])
+    df = teams_df.copy()
+
+    pilot_col = find_column(df, ["пилот", "driver"])
+    team_col = find_column(df, ["команда"])
 
     if not pilot_col or not team_col:
         return {}
 
     mapping = {}
-    for _, row in teams_df.iterrows():
+
+    for _, row in df.iterrows():
         pilot = str(row[pilot_col]).strip()
-        team_raw = normalize_cols(str(row[team_col]).strip())
-        team = TEAM_MAP.get(team_raw, team_raw)
+        team_raw = str(row[team_col]).strip()
+        team_key = normalize_team_key(team_raw)
+        team = TEAM_MAP.get(team_key, team_raw)
         mapping[pilot] = team
+
     return mapping
 
 
@@ -184,7 +180,6 @@ def load_season_data(xls_path: str):
     xls = pd.ExcelFile(xls_path)
     season_year = xls_path.split("_")[-1].split(".")[0]
 
-    # ----- GP LIST -----
     gp_sheet = f"GP_List_{season_year}"
     gp_df = pd.read_excel(xls, gp_sheet)
     gp_df.columns = ["code", "name"]
@@ -194,21 +189,16 @@ def load_season_data(xls_path: str):
         gp_df["name"].astype(str).str.strip()
     ))
 
-    # ----- WDC / WCC -----
     wdc = pd.read_excel(xls, f"WDC_{season_year}")
     wcc = pd.read_excel(xls, f"WCC_{season_year}")
-
-    # ----- TEAMS -----
     teams = pd.read_excel(xls, f"Teams_{season_year}")
 
-    # ----- ГРАН-ПРИ -----
     grand_prix = {}
 
     for code in gp_list:
         if code not in xls.sheet_names:
             continue
 
-        # читаем целиком без заголовков
         df = pd.read_excel(xls, code, header=None)
 
         sections = {}
@@ -216,22 +206,18 @@ def load_season_data(xls_path: str):
         temp = []
         skip_header = False
 
-        # --- основной проход по строкам ---
         for _, row in df.iterrows():
             row_text = " ".join(
-                normalize_cols(str(x)) for x in row.values if pd.notna(x)
+                normalize_cols(str(x))
+                for x in row.values
+                if pd.notna(x)
             ).strip()
 
-            if row_text == "" or row_text == "nan":
+            if not row_text:
                 continue
 
-            # -------- Блок QUALIFICATION (по ключевому слову) --------
-            if any(x in row_text for x in [
-                "qualificat",       # в т.ч. обрезанный заголовок
-                "qualification",
-                "qualify",
-                "квалиф",
-            ]):
+            # Блок QUALI
+            if any(x in row_text for x in ["qualificat", "qualification", "qualify", "квалиф"]):
                 if key and temp:
                     sections[key] = pd.DataFrame(temp)
                 key = "qualifying"
@@ -239,7 +225,6 @@ def load_season_data(xls_path: str):
                 skip_header = True
                 continue
 
-            # -------- Блок RACE DRIVERS --------
             if "race_pilots" in row_text or "race drivers" in row_text:
                 if key and temp:
                     sections[key] = pd.DataFrame(temp)
@@ -248,7 +233,6 @@ def load_season_data(xls_path: str):
                 skip_header = True
                 continue
 
-            # -------- Блок RACE TEAMS --------
             if "race_teams" in row_text or "race teams" in row_text:
                 if key and temp:
                     sections[key] = pd.DataFrame(temp)
@@ -257,45 +241,15 @@ def load_season_data(xls_path: str):
                 skip_header = True
                 continue
 
-            # пропускаем строку-шапку сразу после объявления блока
             if skip_header:
                 skip_header = False
                 continue
 
-            # копим строки внутри текущего блока
             if key is not None:
                 temp.append(list(row))
 
-        # закрываем последний блок
         if key and temp:
             sections[key] = pd.DataFrame(temp)
-
-        # ---------- ФОЛБЭК: если квалификация не нашлась ----------
-        if "qualifying" not in sections:
-            qual_header_idx = None
-            race_pilots_row_idx = None
-
-            for idx, row in df.iterrows():
-                norm_cells = [normalize_cols(str(x)) for x in row.values if pd.notna(x)]
-                joined = " ".join(norm_cells)
-
-                # первая шапка с "позиция" — считаем её шапкой квалификации
-                if qual_header_idx is None and any(
-                    ("позиция" in c) or ("position" in c) for c in norm_cells
-                ):
-                    qual_header_idx = idx
-                    continue
-
-                # первая строка с race_pilots — начало блока гонки пилотов
-                if qual_header_idx is not None and (
-                    "race_pilots" in joined or "race drivers" in joined
-                ):
-                    race_pilots_row_idx = idx
-                    break
-
-            if qual_header_idx is not None and race_pilots_row_idx is not None:
-                qual_df = df.iloc[qual_header_idx + 1: race_pilots_row_idx].reset_index(drop=True)
-                sections["qualifying"] = qual_df
 
         grand_prix[code] = sections
 
