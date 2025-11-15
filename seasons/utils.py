@@ -134,26 +134,24 @@ def build_pilot_team_map(teams_df):
 # ===========================
 # Чтение Excel сезона
 # ===========================
-def load_season_data(path):
+def load_season_data(path, year):
     xls = pd.ExcelFile(path)
 
-    gp_list = pd.read_excel(xls, "GP_List_" + path[-8:-5])
+    # ❗ теперь корректно
+    gp_list = pd.read_excel(xls, f"GP_List_{year}")
     gp_list = normalize_df(gp_list)
 
-    teams = pd.read_excel(xls, "Teams_" + path[-8:-5])
-    wdc = pd.read_excel(xls, "WDC_" + path[-8:-5])
-    wcc = pd.read_excel(xls, "WCC_" + path[-8:-5])
+    teams = pd.read_excel(xls, f"Teams_{year}")
+    wdc = pd.read_excel(xls, f"WDC_{year}")
+    wcc = pd.read_excel(xls, f"WCC_{year}")
 
     grand_prix = {}
+
     for sheet in xls.sheet_names:
-        if sheet.isupper() and "_" not in sheet:
+        # листы гонок — все коды вроде 'BAH', 'MIA', 'SPA', 'JPN'
+        if sheet.isupper() and "_" not in sheet and len(sheet) <= 4:
             gp = pd.read_excel(xls, sheet, header=None)
-            blocks = {
-                "qualifying": gp.iloc[2:].reset_index(drop=True),
-                "race_drivers": gp.iloc[2:].reset_index(drop=True),
-                "race_teams": None
-            }
-            grand_prix[sheet] = blocks
+            grand_prix[sheet] = {"raw": gp}
 
     return {
         "teams": teams,
