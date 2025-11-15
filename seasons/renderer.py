@@ -19,14 +19,21 @@ def normalize_df(df: pd.DataFrame):
         return df
 
     df = df.copy()
-
     clean_cols = []
+
     for c in df.columns:
-        norm = normalize_cols(c)
-        clean_cols.append(norm.title())
+        # 1) безопасно нормализуем
+        if isinstance(c, str):
+            norm = normalize_cols(c)
+        else:
+            norm = str(c)
+
+        # 2) защищённый title()
+        clean_cols.append(norm.strip().title())
 
     df.columns = clean_cols
 
+    # Нормализация строк в данных
     for col in df.columns:
         df[col] = df[col].apply(
             lambda x: normalize_cols(x) if isinstance(x, str) else x
