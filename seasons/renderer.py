@@ -15,8 +15,9 @@ def normalize_df(df):
     new_cols = []
     for c in df.columns:
         c = str(c).strip()
-        c = c.replace("\\", "/")      # заменяем проблемный обратный слэш
-        c = c.replace("  ", " ")      # двойные пробелы
+        c = c.replace("\\", "/")
+        c = c.replace("Команды", "Команда")
+        c = c.replace("команды", "команда")
         c = c.replace("\n", " ")
         c = c.replace("\r", " ")
         c = c.replace("\xa0", " ")
@@ -25,6 +26,7 @@ def normalize_df(df):
 
     df.columns = new_cols
     return df
+
 
 
 def render_season(season_name, race_code, data):
