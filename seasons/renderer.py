@@ -34,10 +34,16 @@ def normalize_df(df):
     return df
 
 
-
-
 def render_season(season_name, race_code, data):
-    gp_name = data["gp_code_to_name"].get(race_code, race_code)
+
+    # === Универсальный способ получить имя Гран-при ===
+    if "gp_code_to_name" in data:
+        gp_name = data["gp_code_to_name"].get(race_code, race_code)
+    elif "gp_map" in data:
+        gp_name = data["gp_map"].get(race_code, race_code)
+    else:
+        gp_name = race_code
+
     st.title(f"{gp_name} — сезон {season_name}")
 
     teams = normalize_df(data["teams"])
@@ -46,7 +52,7 @@ def render_season(season_name, race_code, data):
 
     pilot_to_team = build_pilot_team_map(teams)
 
-    gp = data["grand_prix"].get(race_code, {})
+    gp = data.get("grand_prix", {}).get(race_code, {})
 
     qualifying   = gp.get("qualifying")
     race_drivers = gp.get("race_drivers")
