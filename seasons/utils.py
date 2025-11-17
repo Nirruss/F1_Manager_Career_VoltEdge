@@ -104,16 +104,32 @@ def colorize_table(df: pd.DataFrame):
 # ПИЛОТ → КОМАНДА
 # =========================
 def build_pilot_team_map(teams_df):
-    pilot_col = find_column(teams_df, ["pilot", "пилот"])
-    team_col  = find_column(teams_df, ["команда", "team"])
+    # колонка с названием команды
+    team_col = find_column(teams_df, ["команда", "team"])
+    if team_col is None:
+        return {}
+
+    # все колонки, в которых есть слово "пилот" / "pilot"
+    pilot_cols = []
+    for col in teams_df.columns:
+        cname = normalize_match(col)
+        if "пилот" in cname or "pilot" in cname:
+            pilot_cols.append(col)
 
     mapping = {}
     for _, row in teams_df.iterrows():
-        p = str(row[pilot_col])
-        t = normalize_match(str(row[team_col]))
-        t = TEAM_MAP.get(t, t)
-        mapping[p] = t
+        team_raw = str(row[team_col])
+        team_norm = normalize_match(team_raw)
+        team_key = TEAM_MAP.get(team_norm, team_norm)
+
+        for col in pilot_cols:
+            name = row[col]
+            if pd.isna(name):
+                continue
+            mapping[str(name)] = team_key
+
     return mapping
+
 
 
 # =========================
