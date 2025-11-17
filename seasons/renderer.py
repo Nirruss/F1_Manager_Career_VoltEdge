@@ -23,44 +23,32 @@ def normalize_df(df):
         c = c.replace("\xa0", " ")
         c = c.strip()
         new_cols.append(c)
+
     df.columns = new_cols
-
-    # Преобразуем все возможные float → int
-    for col in df.columns:
-        df[col] = pd.to_numeric(df[col], errors="ignore")
-        if pd.api.types.is_float_dtype(df[col]) and df[col].notna().all():
-            df[col] = df[col].astype(int)
-
     return df
 
 
 def render_season(season_name, race_code, data):
 
-    # === Универсальный способ получить имя Гран-при ===
-    if "gp_code_to_name" in data:
-        gp_name = data["gp_code_to_name"].get(race_code, race_code)
-    elif "gp_map" in data:
-        gp_name = data["gp_map"].get(race_code, race_code)
-    else:
-        gp_name = race_code
+    gp_name = data["gp_code_to_name"].get(race_code, race_code)
 
     st.title(f"{gp_name} — сезон {season_name}")
 
     teams = normalize_df(data["teams"])
-    wdc   = normalize_df(data["wdc"])
-    wcc   = normalize_df(data["wcc"])
+    wdc = normalize_df(data["wdc"])
+    wcc = normalize_df(data["wcc"])
 
     pilot_to_team = build_pilot_team_map(teams)
 
-    gp = data.get("grand_prix", {}).get(race_code, {})
+    gp = data["grand_prix"].get(race_code, {})
 
     qualifying   = gp.get("qualifying")
     race_drivers = gp.get("race_drivers")
     race_teams   = gp.get("race_teams")
 
-    tab_gp, tab_wdc, tab_wcc, tab_team = st.tabs(["Гран-при","WDC","WCC","Команды"])
+    tab_gp, tab_wdc, tab_wcc, tab_team = st.tabs(["Гран-при", "WDC", "WCC", "Команды"])
 
-    # ==== ГРАН-ПРИ ====
+    # ------------------ ГРАН-ПРИ ------------------
     with tab_gp:
         st.subheader("Квалификация")
         if qualifying is not None:
@@ -70,50 +58,46 @@ def render_season(season_name, race_code, data):
 
         st.subheader("Гонка — пилоты")
         if race_drivers is not None:
-            race = normalize_df(race_drivers)
-            lapcol = find_column(race, ["лучший","best","lap"])
+            df = normalize_df(race_drivers)
 
+            lapcol = find_column(df, ["best", "лучший", "lap"])
             if lapcol:
-                parsed = race[lapcol].apply(parse_lap_time)
+                parsed = df[lapcol].apply(parse_lap_time)
                 best = parsed.dropna().min()
 
                 def sty(col):
                     if col.name != lapcol:
-                        return [""]*len(col)
+                        return [""] * len(col)
                     return [
                         "background-color:#8847BD; color:white; font-weight:bold"
-                        if parse_lap_time(x)==best else ""
+                        if parse_lap_time(x) == best else ""
                         for x in col
                     ]
 
-                st.write(race.style.apply(sty, axis=0))
+                st.write(df.style.apply(sty, axis=0))
             else:
-                st.write(race)
+                st.write(colorize_table(df))
+        else:
+            st.warning("Нет данных")
 
         st.subheader("Гонка — команды")
         if race_teams is not None:
             st.write(colorize_table(normalize_df(race_teams)))
+        else:
+            st.warning("Нет данных")
 
-    # ==== WDC ====
+    # ------------------ WDC ------------------
     with tab_wdc:
-        st.subheader(f"WDC {season_name}")
-
         w = wdc.copy()
-
-        pilot_col = find_column(w,["пилот","driver"])
+        pilot_col = find_column(w, ["пилот", "driver"])
         if pilot_col:
-            w["Команда"] = w[pilot_col].map(
-                lambda x: pilot_to_team.get(str(x), "")
-            )
-
+            w["Команда"] = w[pilot_col].map(lambda x: pilot_to_team.get(str(x), ""))
         st.write(colorize_table(w))
 
-    # ==== WCC ====
+    # ------------------ WCC ------------------
     with tab_wcc:
-        st.subheader(f"WCC {season_name}")
         st.write(colorize_table(wcc))
 
-    # ==== Teams ====
+    # ------------------ Teams ------------------
     with tab_team:
-        st.subheader("Составы команд")
         st.write(colorize_table(teams))
