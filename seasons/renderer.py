@@ -23,9 +23,16 @@ def normalize_df(df):
         c = c.replace("\xa0", " ")
         c = c.strip()
         new_cols.append(c)
-
     df.columns = new_cols
+
+    # Преобразуем все возможные float → int
+    for col in df.columns:
+        df[col] = pd.to_numeric(df[col], errors="ignore")
+        if pd.api.types.is_float_dtype(df[col]) and df[col].notna().all():
+            df[col] = df[col].astype(int)
+
     return df
+
 
 
 
