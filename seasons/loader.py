@@ -1,64 +1,62 @@
 import pandas as pd
 
 
-def _extract_block(df: pd.DataFrame, start: int | None, end: int | None):
+def _extract_block(df: pd.DataFrame, start: int, end: int):
     """
-    Вырезает блок между start и end (не включая start),
-    первая строка блока становится заголовками.
+    Вырезает блок таблицы между start и end.
+    Первая строка блока — это заголовки.
+    Остальные строки — данные.
     """
-    if start is None:
-        return None
+    # всё между start+1 и end
+    block = df.iloc[start+1:end].reset_index(drop=True)
 
-    if end is None:
-        end = len(df)
-
-    block = df.iloc[start + 1:end].reset_index(drop=True)
+    # если блок пустой – пропускаем
     if block.empty:
         return None
 
+    # первая строка — header
     header = block.iloc[0]
     data = block.iloc[1:].reset_index(drop=True)
     data.columns = header
 
-    # Убираем полностью пустые строки
+    # убираем полностью пустые строки
     data = data.dropna(how="all")
-    if data.empty:
-        return None
 
-    return data
+    return data if not data.empty else None
 
 
-def _parse_grand_prix_sheet(xl: pd.ExcelFile, code: str) -> dict:
+def _parse_grand_prix_sheet(xl: pd.ExcelFile, code: str):
     """
-    Парсит лист одного Гран-при: Qualification, Race_Pilots, Race_Teams.
+    Разделяет Qualification / Race_Pilots / Race_Teams для листа ГП.
     """
-    raw = xl.parse(code, header=None)
+    df = xl.parse(code, header=None)
 
     q_start = rp_start = rt_start = None
 
-    # ищем строки-названия разделов
-    for i, row in raw.iterrows():
-        cells = [str(x) for x in row if pd.notna(x)]
-        if not cells:
-            continue
+    # ищем строки начала секций
+    for i, row in df.iterrows():
+        cell = str(row.iloc[0]).strip().lower()
 
-        text = " ".join(cells).strip().lower()
-
-        if "qualification" in text and q_start is None:
+        if cell == "qualification":
             q_start = i
-        elif "race_pilots" in text and rp_start is None:
+        elif cell == "race_pilots":
             rp_start = i
-        elif "race_teams" in text and rt_start is None:
+        elif cell == "race_teams":
             rt_start = i
 
-    # границы
-    q_end = rp_start if rp_start is not None else rt_start
-    rp_end = rt_start
-    rt_end = None
+    # теперь определим границы
+    # qualification: q_start → rp_start
+    # race_pilots:   rp_start → rt_start
+    # race_teams:    rt_start → конец
+    last = len(df)
 
-    qualifying   = _extract_block(raw, q_start, q_end)
-    race_drivers = _extract_block(raw, rp_start, rp_end)
-    race_teams   = _extract_block(raw, rt_start, rt_end)
+    q_end = rp_start if rp_start else last
+    rp_end = rt_start if rt_start else last
+    rt_end = last
+
+    qualifying   = _extract_block(df, q_start, q_end) if q_start is not None else None
+    race_drivers = _extract_block(df, rp_start, rp_end) if rp_start is not None else None
+    race_teams   = _extract_block(df, rt_start, rt_end) if rt_start is not None else None
 
     return {
         "qualifying": qualifying,
@@ -70,35 +68,29 @@ def _parse_grand_prix_sheet(xl: pd.ExcelFile, code: str) -> dict:
 def load_season(filename: str):
     xl = pd.ExcelFile(filename)
 
+    # определяем год
     year = filename[-9:-5]
 
-    # GP List
     gp_list = xl.parse(f"GP_List_{year}")
     gp_map = dict(zip(gp_list["Код"], gp_list["Название"]))
 
-    # основные таблицы
     teams = xl.parse(f"Teams_{year}")
-    wdc = xl.parse(f"WDC_{year}")
-    wcc = xl.parse(f"WCC_{year}")
+    wdc   = xl.parse(f"WDC_{year}")
+    wcc   = xl.parse(f"WCC_{year}")
 
-    grand_prix: dict[str, dict] = {}
+    grand_prix = {}
 
     for code in gp_map.keys():
         if code in xl.sheet_names:
             grand_prix[code] = _parse_grand_prix_sheet(xl, code)
         else:
-            grand_prix[code] = {
-                "qualifying": None,
-                "race_drivers": None,
-                "race_teams": None,
-            }
+            grand_prix[code] = {"qualifying":None, "race_drivers":None, "race_teams":None}
 
     return {
         "teams": teams,
         "wdc": wdc,
         "wcc": wcc,
-        "gp_codes": list(gp_map.keys()),
-        "gp_names": list(gp_map.values()),
         "gp_code_to_name": gp_map,
-        "grand_prix": grand_prix,
+        "gp_codes": list(gp_map.keys()),
+        "grand_prix": grand_prix
     }
