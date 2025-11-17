@@ -38,7 +38,7 @@ def normalize_df(df):
 
 def render_season(season_name, race_code, data):
     gp_name = data["gp_code_to_name"].get(race_code, race_code)
-    st.header(f"{gp_name} — сезон {season_name}")
+    st.title(f"{gp_name} — сезон {season_name}")
 
     teams = normalize_df(data["teams"])
     wdc   = normalize_df(data["wdc"])
