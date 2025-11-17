@@ -47,6 +47,7 @@ def _extract_block(df: pd.DataFrame, start: int, end: int):
     data.columns = _fix_headers(header)
 
     data = data.dropna(how="all")
+    data = data.dropna(axis=1, how="all")
 
     return data if not data.empty else None
 

@@ -24,10 +24,13 @@ def normalize_match(s):
 def find_column(df, keys):
     for col in df.columns:
         cname = normalize_match(col)
-        for key in keys:
-            if key in cname:
-                return col
+
+        # поддержка "команда_2", "команда_3", "team_2" и т.п.
+        if any(key in cname for key in keys):
+            return col
+
     return None
+
 
 
 # =========================
