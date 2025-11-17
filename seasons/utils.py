@@ -163,15 +163,44 @@ def build_pilot_team_map(teams_df):
 # ЛУЧШИЙ КРУГ
 # =========================
 def parse_lap_time(v):
+    import re
+
+    # не строка — сразу в мусор
     if not isinstance(v, str):
         return pd.NaT
-    s = normalize_match(v)
-    if any(x in s for x in ["dnf", "lap", "выб"]):
+
+    s = v.strip().replace("\xa0", " ")
+    s = s.replace(",", ".")  # на всякий случай, если где-то запятая
+    low = s.lower()
+
+    # явные не-круги: DNF, выбыл и т.п.
+    if any(x in low for x in ["dnf", "выб"]):
         return pd.NaT
+
+    # "+1 круг", "+2 круга" — это не время
+    if "+" in low or "круг" in low:
+        return pd.NaT
+
+    # Формат M:SS.mmm или MM:SS.mmm (например 1:15.229)
+    m = re.match(r"^(\d+):(\d{2})[.](\d{3})$", s)
+    if m:
+        minutes, seconds, millis = map(int, m.groups())
+        total_ms = ((minutes * 60) + seconds) * 1000 + millis
+        return pd.to_timedelta(total_ms, unit="ms")
+
+    # Формат M:SS:mmm (например 1:33:720 — как у тебя в Бахрейне)
+    m = re.match(r"^(\d+):(\d{2}):(\d{3})$", s)
+    if m:
+        minutes, seconds, millis = map(int, m.groups())
+        total_ms = ((minutes * 60) + seconds) * 1000 + millis
+        return pd.to_timedelta(total_ms, unit="ms")
+
+    # Всё остальное — пусть попробует сам pandas (на случай 0:01:33.256 и т.п.)
     try:
-        return pd.to_timedelta(v)
-    except:
+        return pd.to_timedelta(s)
+    except Exception:
         return pd.NaT
+
 
 
 # =========================
