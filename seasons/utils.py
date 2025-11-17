@@ -97,7 +97,31 @@ def colorize_table(df: pd.DataFrame):
         fg = get_text_color(bg)
         return [f"background-color:{bg}; color:{fg}" for _ in row]
 
-    return out.style.apply(style_row, axis=1).hide(axis="index")
+    # форматируем числа красиво
+    def format_int_like(x):
+        # NaN / пустые
+        if pd.isna(x):
+            return ""
+        # уже целое
+        if isinstance(x, (int, np.integer)):
+            return str(x)
+        # число с плавающей точкой
+        if isinstance(x, (float, np.floating)):
+            v = float(x)
+            # если это на самом деле целое (25.0, 7.0 и т.п.)
+            if abs(v - round(v)) < 1e-9:
+                return str(int(round(v)))
+            else:
+                # на всякий случай для нецелых (если где-то появятся)
+                return f"{v:.3f}".rstrip("0").rstrip(".")
+        # строки типа "DNF" и всё остальное оставляем как есть
+        return x
+
+    styler = out.style.apply(style_row, axis=1).hide(axis="index")
+    styler = styler.format(format_int_like)
+
+    return styler
+
 
 
 # =========================
