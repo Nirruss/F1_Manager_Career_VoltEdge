@@ -175,88 +175,16 @@ def parse_lap_time(v):
 # ПОЛНЫЙ ПАРСЕР СЕЗОНА
 # =========================
 def load_season_data(xls_path):
-    xls = pd.ExcelFile(xls_path)
-    season_year = xls_path.split("_")[-1].split(".")[0]
+    """
+    Обёртка над более надёжным парсером из loader.load_season.
+    Он корректно делит листы на Qualification / Race_Pilots / Race_Teams
+    и возвращает готовую структуру для renderer.
+    """
+    try:
+        # когда код запускается как пакет seasons.*
+        from .loader import load_season
+    except ImportError:
+        # на случай локального запуска без пакета
+        from loader import load_season
 
-    # ---------- ЧТЕНИЕ GP LIST ----------
-    gp_df = pd.read_excel(xls, f"GP_List_{season_year}")
-
-    code_col = find_column(gp_df, ["код", "code"])
-    name_col = find_column(gp_df, ["назв", "name"])
-
-    gp_list = dict(zip(
-        gp_df[code_col].astype(str).str.strip(),
-        gp_df[name_col].astype(str).str.strip()
-    ))
-
-    # ---------- WDC / WCC / TEAMS ----------
-    wdc = pd.read_excel(xls, f"WDC_{season_year}")
-    wcc = pd.read_excel(xls, f"WCC_{season_year}")
-    teams = pd.read_excel(xls, f"Teams_{season_year}")
-
-    # ---------- ПАРСЕР ГРАН-ПРИ ----------
-    grand_prix = {}
-
-    for code in gp_list:
-        if code not in xls.sheet_names:
-            grand_prix[code] = {}
-            continue
-
-        df = pd.read_excel(xls, code, header=None)
-        sections = {}
-        key = None
-        temp = []
-        skip_header = False
-
-        for _, row in df.iterrows():
-            row_text = " ".join(
-                normalize_match(str(x)) for x in row.values if pd.notna(x)
-            )
-
-            if row_text == "":
-                continue
-
-            if any(x in row_text for x in ["qualificat", "qualification", "qualify", "квалиф"]):
-                if key and temp:
-                    sections[key] = pd.DataFrame(temp)
-                key = "qualifying"
-                temp = []
-                skip_header = True
-                continue
-
-            if "race_drivers" in row_text:
-                if key and temp:
-                    sections[key] = pd.DataFrame(temp)
-                key = "race_drivers"
-                temp = []
-                skip_header = True
-                continue
-
-            if "race_teams" in row_text:
-                if key and temp:
-                    sections[key] = pd.DataFrame(temp)
-                key = "race_teams"
-                temp = []
-                skip_header = True
-                continue
-
-            if skip_header:
-                skip_header = False
-                continue
-
-            if key:
-                temp.append(list(row))
-
-        if key and temp:
-            sections[key] = pd.DataFrame(temp)
-
-        grand_prix[code] = sections
-
-    return {
-        "gp_map": gp_list,
-        "gp_list": gp_list,
-        "grand_prix": grand_prix,
-        "wdc": wdc,
-        "wcc": wcc,
-        "teams": teams,
-    }
+    return load_season(xls_path)
