@@ -11,11 +11,21 @@ from seasons.utils import (
 
 def normalize_df(df):
     df = df.copy()
-    cols = []
+
+    new_cols = []
     for c in df.columns:
-        cols.append(str(c).strip())
-    df.columns = cols
+        c = str(c).strip()
+        c = c.replace("\\", "/")      # заменяем проблемный обратный слэш
+        c = c.replace("  ", " ")      # двойные пробелы
+        c = c.replace("\n", " ")
+        c = c.replace("\r", " ")
+        c = c.replace("\xa0", " ")
+        c = c.strip()
+        new_cols.append(c)
+
+    df.columns = new_cols
     return df
+
 
 def render_season(season_name, race_code, data):
 
