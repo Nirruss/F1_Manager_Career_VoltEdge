@@ -52,6 +52,9 @@ def render_season(season_name, race_code, data):
     with tab_gp:
         st.subheader("Квалификация")
         if qualifying is not None:
+            st.write("DEBUG QUALIFYING:")
+            st.write(qualifying)
+            st.write("COLUMNS:", list(qualifying.columns) if qualifying is not None else None)
             st.write(colorize_table(normalize_df(qualifying)))
         else:
             st.warning("Нет данных")
