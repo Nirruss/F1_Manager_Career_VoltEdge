@@ -177,8 +177,8 @@ def parse_lap_time(v):
 def load_season_data(xls_path):
     """
     Унифицированный загрузчик сезона.
-    Берём корректный парсер из loader.load_season,
-    но возвращаем структуру, которую ожидает app.py.
+    Берём корректный парсер из loader.load_season
+    и возвращаем структуру, которую ожидают и app.py, и renderer.py.
     """
     try:
         from .loader import load_season
@@ -187,19 +187,19 @@ def load_season_data(xls_path):
 
     parsed = load_season(xls_path)
 
-    # -----------------------------
-    # Приводим к формату, который ждёт app.py
-    # -----------------------------
     season_data = {
         "teams": parsed["teams"],
         "wdc": parsed["wdc"],
         "wcc": parsed["wcc"],
 
-        # старый app.py ожидает gp_map и gp_list
-        "gp_map": parsed["gp_code_to_name"],     # словарь: CODE -> NAME
-        "gp_list": parsed["gp_codes"],           # список кодов гонок
+        # --- оба нужны ---
+        "gp_code_to_name": parsed["gp_code_to_name"],   # для renderer
+        "gp_map":          parsed["gp_code_to_name"],   # для app.py старой версии
 
-        # основной блок с разрезанными таблицами
+        # --- список кодов ГП по ожиданиям старого интерфейса ---
+        "gp_list": parsed["gp_codes"],
+
+        # --- результаты гонок ---
         "grand_prix": parsed["grand_prix"],
     }
 
