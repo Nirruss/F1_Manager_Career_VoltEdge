@@ -176,15 +176,31 @@ def parse_lap_time(v):
 # =========================
 def load_season_data(xls_path):
     """
-    Обёртка над более надёжным парсером из loader.load_season.
-    Он корректно делит листы на Qualification / Race_Pilots / Race_Teams
-    и возвращает готовую структуру для renderer.
+    Унифицированный загрузчик сезона.
+    Берём корректный парсер из loader.load_season,
+    но возвращаем структуру, которую ожидает app.py.
     """
     try:
-        # когда код запускается как пакет seasons.*
         from .loader import load_season
     except ImportError:
-        # на случай локального запуска без пакета
         from loader import load_season
 
-    return load_season(xls_path)
+    parsed = load_season(xls_path)
+
+    # -----------------------------
+    # Приводим к формату, который ждёт app.py
+    # -----------------------------
+    season_data = {
+        "teams": parsed["teams"],
+        "wdc": parsed["wdc"],
+        "wcc": parsed["wcc"],
+
+        # старый app.py ожидает gp_map и gp_list
+        "gp_map": parsed["gp_code_to_name"],     # словарь: CODE -> NAME
+        "gp_list": parsed["gp_codes"],           # список кодов гонок
+
+        # основной блок с разрезанными таблицами
+        "grand_prix": parsed["grand_prix"],
+    }
+
+    return season_data
