@@ -65,6 +65,11 @@ def render_season(season_name, race_code, data):
             df = normalize_df(race_drivers)
 
             lapcol = find_column(df, ["best", "лучший", "lap"])
+            # сначала базовая раскраска команд
+            styled = colorize_table(df)
+
+            lapcol = find_column(df, ["best", "лучший", "lap"])
+
             if lapcol:
                 parsed = df[lapcol].apply(parse_lap_time)
                 best = parsed.dropna().min()
@@ -78,9 +83,10 @@ def render_season(season_name, race_code, data):
                         for x in col
                     ]
 
-                st.write(df.style.apply(sty, axis=0))
-            else:
-                st.write(colorize_table(df))
+                styled = styled.apply(sty, axis=0)
+
+            st.write(styled)
+
         else:
             st.warning("Нет данных")
 
