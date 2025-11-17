@@ -58,10 +58,6 @@ def render_season(season_name, race_code, data):
 
         st.subheader("Гонка — пилоты")
         if race_drivers is not None:
-            st.write("RAW RACE_PILOTS:")
-            st.write(race_drivers)
-            st.write("RACE PILOTS COLUMNS:", list(race_drivers.columns))
-
             df = normalize_df(race_drivers)
 
             lapcol = find_column(df, ["best", "лучший", "lap"])
