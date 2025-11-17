@@ -17,7 +17,8 @@ def load_season(filename: str):
     races = {}
     for code in gp_map.keys():
         if code in xl.sheet_names:
-            races[code] = xl.parse(code)
+            # таблицы гонок всегда имеют заголовок со второй строки
+            races[code] = xl.parse(code, header=1)
         else:
             races[code] = None
 
