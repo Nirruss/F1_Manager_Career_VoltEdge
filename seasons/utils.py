@@ -46,7 +46,7 @@ TEAM_COLORS = {
     "haas": "#B6BABD",
     "williams": "#018CFF",
     "kick sauber": "#52E252",
-    "alpine": "#0090FF",
+    "alpine": "#EE12BA",
     "voltedge": "#F4EA00",
 }
 
