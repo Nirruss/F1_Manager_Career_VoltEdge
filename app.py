@@ -10,11 +10,12 @@ st.set_page_config(page_title="F1 Manager Dashboard", layout="wide")
 # Выбор сезона
 # -------------------------
 st.sidebar.title("Выбор сезона")
-season_choice = st.sidebar.selectbox("Сезон", ["2024", "2025"])
+season_choice = st.sidebar.selectbox("Сезон", ["2024", "2025", "2026"])
 
 excel_files = {
     "2024": "F1_Manager_2024.xlsx",
     "2025": "F1_Manager_2025.xlsx",
+    "2026": "F1_Manager_2026.xlsx",
 }
 
 xls_path = excel_files[season_choice]
